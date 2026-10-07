@@ -36,7 +36,11 @@ def debug_yt():
             }
         }
         
+    use_cookies = request.args.get("cookies", "1") != "0"
     opts = YtDlpService.get_default_opts(extra)
+    if not use_cookies:
+        opts.pop("cookiefile", None)
+        
     cookie_file = YtDlpService.get_cookie_file()
     cookies_count = 0
     if cookie_file and os.path.exists(cookie_file):
@@ -49,6 +53,7 @@ def debug_yt():
     res = {
         "url": url,
         "client": client or "default",
+        "use_cookies": use_cookies,
         "node": shutil.which("node"),
         "cookies_present": bool(cookie_file),
         "cookies_count": cookies_count,
@@ -56,8 +61,13 @@ def debug_yt():
     }
     
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        if client == "service":
+            info, err = YtDlpService.extract_info(url)
+            if not info:
+                raise Exception(err or "Extraction failed via service")
+        else:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
             res["success"] = True
             res["info_keys"] = list(info.keys()) if info else []
             res["title"] = info.get("title") if info else None
