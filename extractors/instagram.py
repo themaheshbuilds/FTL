@@ -21,6 +21,33 @@ class InstagramExtractor(BaseExtractor):
         hostname = (urlparse(url).hostname or "").lower()
         return bool(INSTAGRAM_PATTERN.search(hostname))
 
+    @staticmethod
+    def _select_best_video_format(formats: List[Dict[str, Any]]) -> Optional[str]:
+        """Select best progressive video format with audio, avoiding audio-only DASH streams."""
+        if not formats:
+            return None
+
+        # Filter candidates that have a direct URL and are not audio-only
+        video_candidates = [f for f in formats if f.get("url") and f.get("vcodec") != "none"]
+        if not video_candidates:
+            video_candidates = [f for f in formats if f.get("url")]
+            if not video_candidates:
+                return None
+
+        # 1. Progressive video with audio muxed (acodec != 'none')
+        progressive = [f for f in video_candidates if f.get("acodec") != "none"]
+        if progressive:
+            return max(
+                progressive,
+                key=lambda f: (f.get("height") or 0, f.get("width") or 0, f.get("tbr") or 0)
+            ).get("url")
+
+        # 2. Highest resolution video candidate
+        return max(
+            video_candidates,
+            key=lambda f: (f.get("height") or 0, f.get("width") or 0, f.get("tbr") or 0)
+        ).get("url")
+
     def _extract_via_instagram_ie(self, url: str) -> Optional[AnalysisResult]:
         """Extract media using yt-dlp's InstagramIE directly.
         
@@ -28,148 +55,169 @@ class InstagramExtractor(BaseExtractor):
         retaining full-resolution image URLs that standard yt-dlp video extractors
         discard when format checks fail on static photos.
         """
-        opts = YtDlpService.get_default_opts({"skip_download": True, "quiet": True})
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ie = ydl.get_info_extractor("Instagram")
-                ie.initialize()
+        proxies = YtDlpService.get_active_proxies()
+        candidate_proxies = list(proxies) if proxies else [None]
+        if candidate_proxies and candidate_proxies[0] is not None:
+            candidate_proxies.append(None)
 
-                # Override raise_no_formats so single photo posts return metadata instead of raising ExtractorError
-                orig_raise_no_formats = ie.raise_no_formats
-                ie.raise_no_formats = lambda msg, expected=True: None
-                try:
-                    info = ie._real_extract(url)
-                finally:
-                    ie.raise_no_formats = orig_raise_no_formats
+        info = None
+        for current_proxy in candidate_proxies[:3]:
+            extra_opts = {
+                "skip_download": True,
+                "quiet": True,
+                "referer": "https://www.instagram.com/",
+                "http_headers": {
+                    "Referer": "https://www.instagram.com/",
+                    "Origin": "https://www.instagram.com",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                }
+            }
+            if current_proxy:
+                extra_opts["proxy"] = current_proxy
 
-            if not info or not isinstance(info, dict):
-                return None
+            opts = YtDlpService.get_default_opts(extra_opts)
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ie = ydl.get_info_extractor("Instagram")
+                    ie.initialize()
 
-            title = info.get("title") or "Instagram Media"
-            description = info.get("description")
-            entries = info.get("entries")
+                    # Override raise_no_formats so single photo posts return metadata instead of raising ExtractorError
+                    orig_raise_no_formats = ie.raise_no_formats
+                    ie.raise_no_formats = lambda msg, expected=True: None
+                    try:
+                        info = ie._real_extract(url)
+                    finally:
+                        ie.raise_no_formats = orig_raise_no_formats
 
-            if entries and isinstance(entries, list):
-                items: List[MediaItem] = []
-                previews: List[str] = []
-                has_videos = False
-                has_images = False
+                if info and isinstance(info, dict):
+                    break
+            except Exception as e:
+                logger.warning(f"Direct InstagramIE extraction trial failed for {url} (proxy={bool(current_proxy)}): {e}")
 
-                for idx, entry in enumerate(entries):
-                    if not entry:
-                        continue
-                    entry_id = entry.get("id") or f"media_{idx + 1}"
-                    formats = entry.get("formats") or []
-                    thumbnails = entry.get("thumbnails") or []
-                    is_video = bool(formats)
+        if not info or not isinstance(info, dict):
+            return None
 
-                    if is_video:
-                        has_videos = True
-                        direct_url = formats[-1].get("url")
-                        ext = "mp4"
-                        mime = "video/mp4"
-                        media_type = "video"
-                        thumb = thumbnails[-1].get("url") if thumbnails else None
-                    else:
-                        has_images = True
-                        # The last thumbnail in yt-dlp candidates is the highest resolution original image
-                        direct_url = thumbnails[-1].get("url") if thumbnails else None
-                        ext = "jpg"
-                        mime = "image/jpeg"
-                        media_type = "image"
-                        thumb = thumbnails[0].get("url") if thumbnails else direct_url
+        title = info.get("title") or "Instagram Media"
+        description = info.get("description")
+        entries = info.get("entries")
 
-                    if not direct_url:
-                        continue
+        if entries and isinstance(entries, list):
+            items: List[MediaItem] = []
+            previews: List[str] = []
+            has_videos = False
+            has_images = False
 
-                    if thumb and thumb not in previews:
-                        previews.append(thumb)
-
-                    item_title = f"{title}_{idx + 1}"
-                    item = MediaItem(
-                        url=direct_url,
-                        media_type=media_type,
-                        filename=sanitize_filename(f"{entry_id}.{ext}"),
-                        mime_type=mime,
-                        title=item_title,
-                        thumbnail_url=thumb,
-                        duration=entry.get("duration")
-                    )
-                    items.append(item)
-
-                if not items:
-                    return None
-
-                if has_videos and has_images:
-                    content_type = "mixed"
-                    available_formats = ["zip", "images_pdf", "images_zip", "mp4"]
-                elif has_videos:
-                    content_type = "video_collection"
-                    available_formats = ["zip", "mp4"]
-                else:
-                    content_type = "image_collection"
-                    available_formats = ["pdf", "docx", "zip", "images"]
-
-                return AnalysisResult(
-                    success=True,
-                    platform="Instagram",
-                    content_type=content_type,
-                    media_count=len(items),
-                    formats=available_formats,
-                    items=items,
-                    previews=previews,
-                    title=title,
-                    description=description
-                )
-            else:
-                # Single item (photo or video/reel)
-                formats = info.get("formats") or []
-                thumbnails = info.get("thumbnails") or []
+            for idx, entry in enumerate(entries):
+                if not entry:
+                    continue
+                entry_id = entry.get("id") or f"media_{idx + 1}"
+                formats = entry.get("formats") or []
+                thumbnails = entry.get("thumbnails") or []
                 is_video = bool(formats)
-                entry_id = info.get("id") or "media"
 
                 if is_video:
-                    content_type = "video"
-                    direct_url = formats[-1].get("url")
+                    has_videos = True
+                    direct_url = self._select_best_video_format(formats)
                     ext = "mp4"
                     mime = "video/mp4"
+                    media_type = "video"
                     thumb = thumbnails[-1].get("url") if thumbnails else None
-                    available_formats = ["mp4", "mkv", "webm", "audio", "m4a"]
                 else:
-                    content_type = "image"
+                    has_images = True
+                    # The last thumbnail in yt-dlp candidates is the highest resolution original image
                     direct_url = thumbnails[-1].get("url") if thumbnails else None
                     ext = "jpg"
                     mime = "image/jpeg"
+                    media_type = "image"
                     thumb = thumbnails[0].get("url") if thumbnails else direct_url
-                    available_formats = ["original", "pdf", "docx", "zip"]
 
                 if not direct_url:
-                    return None
+                    continue
 
+                if thumb and thumb not in previews:
+                    previews.append(thumb)
+
+                item_title = f"{title}_{idx + 1}"
                 item = MediaItem(
                     url=direct_url,
-                    media_type=content_type,
+                    media_type=media_type,
                     filename=sanitize_filename(f"{entry_id}.{ext}"),
                     mime_type=mime,
-                    title=title,
+                    title=item_title,
                     thumbnail_url=thumb,
-                    duration=info.get("duration")
+                    duration=entry.get("duration")
                 )
-                return AnalysisResult(
-                    success=True,
-                    platform="Instagram",
-                    content_type=content_type,
-                    media_count=1,
-                    formats=available_formats,
-                    items=[item],
-                    previews=[thumb] if thumb else [],
-                    title=title,
-                    description=description
-                )
+                items.append(item)
 
-        except Exception as e:
-            logger.warning(f"Direct InstagramIE extraction failed for {url}: {e}")
-            return None
+            if not items:
+                return None
+
+            if has_videos and has_images:
+                content_type = "mixed"
+                available_formats = ["zip", "images_pdf", "images_zip", "mp4"]
+            elif has_videos:
+                content_type = "video_collection"
+                available_formats = ["zip", "mp4"]
+            else:
+                content_type = "image_collection"
+                available_formats = ["pdf", "docx", "zip", "images"]
+
+            return AnalysisResult(
+                success=True,
+                platform="Instagram",
+                content_type=content_type,
+                media_count=len(items),
+                formats=available_formats,
+                items=items,
+                previews=previews,
+                title=title,
+                description=description
+            )
+        else:
+            # Single item (photo or video/reel)
+            formats = info.get("formats") or []
+            thumbnails = info.get("thumbnails") or []
+            is_video = bool(formats)
+            entry_id = info.get("id") or "media"
+
+            if is_video:
+                content_type = "video"
+                direct_url = self._select_best_video_format(formats)
+                ext = "mp4"
+                mime = "video/mp4"
+                thumb = thumbnails[-1].get("url") if thumbnails else None
+                available_formats = ["mp4", "mkv", "webm", "audio", "m4a"]
+            else:
+                content_type = "image"
+                direct_url = thumbnails[-1].get("url") if thumbnails else None
+                ext = "jpg"
+                mime = "image/jpeg"
+                thumb = thumbnails[0].get("url") if thumbnails else direct_url
+                available_formats = ["original", "pdf", "docx", "zip"]
+
+            if not direct_url:
+                return None
+
+            item = MediaItem(
+                url=direct_url,
+                media_type=content_type,
+                filename=sanitize_filename(f"{entry_id}.{ext}"),
+                mime_type=mime,
+                title=title,
+                thumbnail_url=thumb,
+                duration=info.get("duration")
+            )
+            return AnalysisResult(
+                success=True,
+                platform="Instagram",
+                content_type=content_type,
+                media_count=1,
+                formats=available_formats,
+                items=[item],
+                previews=[thumb] if thumb else [],
+                title=title,
+                description=description
+            )
 
     def analyze(self, url: str) -> AnalysisResult:
         # 1. Try specialized InstagramIE extraction (handles carousels & photo posts)

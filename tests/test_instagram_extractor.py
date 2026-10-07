@@ -107,3 +107,33 @@ def test_instagram_private_or_restricted():
                 res = extractor.analyze("https://www.instagram.com/p/private_post/")
                 assert res.success is False
                 assert res.error_code == "CONTENT_UNAVAILABLE"
+
+
+def test_instagram_video_progressive_selection():
+    extractor = InstagramExtractor()
+    mock_info = {
+        "id": "reel_test",
+        "title": "Video by test_creator",
+        "formats": [
+            {"format_id": "prog1", "vcodec": None, "acodec": None, "url": "https://cdn.example.com/progressive_video.mp4", "height": 720},
+            {"format_id": "dash_v", "vcodec": "vp9", "acodec": "none", "url": "https://cdn.example.com/dash_video_only.mp4", "height": 1080},
+            {"format_id": "dash_a", "vcodec": "none", "acodec": "mp4a", "url": "https://cdn.example.com/dash_audio_only.m4a"}
+        ],
+        "thumbnails": [
+            {"url": "https://cdn.example.com/thumb.jpg"}
+        ]
+    }
+
+    with patch("extractors.instagram.yt_dlp.YoutubeDL") as mock_ydl_cls:
+        mock_ydl = MagicMock()
+        mock_ie = MagicMock()
+        mock_ie._real_extract.return_value = mock_info
+        mock_ydl.get_info_extractor.return_value = mock_ie
+        mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
+
+        res = extractor.analyze("https://www.instagram.com/reel/reel_test/")
+        assert res.success is True
+        assert res.content_type == "video"
+        assert res.media_count == 1
+        # MUST select progressive video, NOT the audio-only dash stream!
+        assert res.items[0].url == "https://cdn.example.com/progressive_video.mp4"

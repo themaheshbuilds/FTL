@@ -331,15 +331,100 @@ const Analyzer = {
         document.getElementById("success-filesize").textContent = sizeText;
 
         const directBtn = document.getElementById("direct-download-btn");
-        directBtn.href = `/download/${encodeURIComponent(data.file_id)}`;
+        const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
+        directBtn.href = downloadUrl;
+        directBtn.setAttribute("download", data.filename || "download_file");
 
         successCard.style.display = "block";
+
+        // Auto trigger download prompt so user gets the file immediately
+        try {
+            const dlLink = document.createElement("a");
+            dlLink.href = downloadUrl;
+            dlLink.download = data.filename || "download_file";
+            document.body.appendChild(dlLink);
+            dlLink.click();
+            document.body.removeChild(dlLink);
+        } catch (e) {
+            console.warn("Auto-download trigger skipped:", e);
+        }
     },
 
     showError(message, code) {
         this.hideAllSections();
         const errorCard = document.getElementById("error-card");
+        const errorTitle = document.getElementById("error-title");
+        const errorBadge = errorCard.querySelector(".error-icon-badge");
+
+        if (code === "COMING_SOON") {
+            if (errorTitle) errorTitle.textContent = "YouTube Downloader — Coming Soon!";
+            if (errorBadge) {
+                errorBadge.textContent = "🚀";
+                errorBadge.style.backgroundColor = "rgba(37, 99, 235, 0.15)";
+                errorBadge.style.color = "var(--brand-primary)";
+            }
+        } else {
+            if (errorTitle) errorTitle.textContent = "Unable to access this content";
+            if (errorBadge) {
+                errorBadge.textContent = "⚠️";
+                errorBadge.style.backgroundColor = "var(--accent-rose-light)";
+                errorBadge.style.color = "var(--accent-rose)";
+            }
+        }
+
         document.getElementById("error-message").textContent = message;
+
+        const fallbackContainer = document.getElementById("error-fallback-container");
+        const errorReasons = document.getElementById("error-reasons");
+
+        const targetUrl = this.currentUrl || (document.getElementById("url-input") ? document.getElementById("url-input").value.trim() : "");
+        const ytMatch = targetUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/i);
+
+        if (fallbackContainer) {
+            if (ytMatch && ytMatch[1]) {
+                const vid = ytMatch[1];
+                const mirror10dl = document.getElementById("btn-mirror-10dl");
+                const mirrorY2 = document.getElementById("btn-mirror-y2mate");
+                const mirrorCobalt = document.getElementById("btn-mirror-cobalt");
+                const mirrorLocal = document.getElementById("btn-mirror-local");
+
+                if (mirror10dl) mirror10dl.href = `https://10downloader.com/download?v=https://youtu.be/${vid}`;
+                if (mirrorY2) mirrorY2.href = `https://www.y2mate.com/youtube/${vid}`;
+                if (mirrorCobalt) mirrorCobalt.href = `https://cobalt.tools`;
+
+                if (mirrorLocal) {
+                    mirrorLocal.onclick = async () => {
+                        mirrorLocal.disabled = true;
+                        mirrorLocal.innerHTML = `<span>⏳</span> Connecting to localhost:5000...`;
+                        try {
+                            const res = await fetch("http://127.0.0.1:5000/api/analyze", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ url: targetUrl })
+                            });
+                            const data = await res.json();
+                            if (res.ok && data.success) {
+                                window.open(`http://127.0.0.1:5000/?url=${encodeURIComponent(targetUrl)}`, "_blank");
+                            } else {
+                                alert("Local server is reachable but reported: " + ((data.error && data.error.message) || "Unknown issue"));
+                            }
+                        } catch (e) {
+                            alert("Local server on port 5000 is not running. To use the local engine, run 'python app.py' in your terminal!");
+                        } finally {
+                            mirrorLocal.disabled = false;
+                            mirrorLocal.innerHTML = `<span>💻</span> Local App (Port 5000)`;
+                        }
+                    };
+                }
+
+                fallbackContainer.style.display = "block";
+                if (errorReasons) errorReasons.style.display = "none";
+            } else {
+                fallbackContainer.style.display = "none";
+                if (errorReasons) errorReasons.style.display = "block";
+            }
+        }
+
         errorCard.style.display = "block";
     },
 

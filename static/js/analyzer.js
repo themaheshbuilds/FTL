@@ -331,9 +331,23 @@ const Analyzer = {
         document.getElementById("success-filesize").textContent = sizeText;
 
         const directBtn = document.getElementById("direct-download-btn");
-        directBtn.href = `/download/${encodeURIComponent(data.file_id)}`;
+        const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
+        directBtn.href = downloadUrl;
+        directBtn.setAttribute("download", data.filename || "download_file");
 
         successCard.style.display = "block";
+
+        // Auto trigger download prompt so user gets the file immediately
+        try {
+            const dlLink = document.createElement("a");
+            dlLink.href = downloadUrl;
+            dlLink.download = data.filename || "download_file";
+            document.body.appendChild(dlLink);
+            dlLink.click();
+            document.body.removeChild(dlLink);
+        } catch (e) {
+            console.warn("Auto-download trigger skipped:", e);
+        }
     },
 
     showError(message, code) {

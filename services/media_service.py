@@ -142,14 +142,24 @@ class MediaService:
 
                 target_format = "audio" if is_audio else quality
 
-                # 1. Try yt-dlp first
-                downloaded_file = YtDlpService.download_media(
-                    url,
-                    str(temp_dir),
-                    format_filter=target_format
-                )
+                # 1. For Instagram MP4 videos, try direct fast download of progressive stream first
+                if analysis.platform == "Instagram" and format_lower == "mp4" and analysis.items:
+                    target_item = next((item for item in analysis.items if item.media_type in ("video", "audio")), analysis.items[0])
+                    if target_item and target_item.url and target_item.url.startswith("http"):
+                        logger.info(f"Directly fetching Instagram progressive video stream: {target_item.filename}")
+                        ok, dpath, err = GenericDownloader.download_file(target_item.url, str(temp_dir), target_item.filename)
+                        if ok and dpath and os.path.exists(dpath) and os.path.getsize(dpath) > 100_000:
+                            downloaded_file = dpath
 
-                # 2. Fallback to direct download of media item stream if yt-dlp did not download
+                # 2. Try yt-dlp if not already downloaded
+                if not downloaded_file or not os.path.exists(downloaded_file):
+                    downloaded_file = YtDlpService.download_media(
+                        url,
+                        str(temp_dir),
+                        format_filter=target_format
+                    )
+
+                # 3. Fallback to direct download of media item stream if yt-dlp did not download
                 if not downloaded_file or not os.path.exists(downloaded_file):
                     if analysis.items:
                         target_item = next((item for item in analysis.items if item.media_type in ("video", "audio")), analysis.items[0])

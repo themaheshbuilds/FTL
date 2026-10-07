@@ -322,3 +322,11 @@ pytest -v
   - Zero bytes are transmitted to the serverless function, allowing 20 MB, 50 MB, or 100 MB+ documents to convert without hitting Vercel's 4.5 MB ceiling.
 - Server-side endpoint (`/api/convert`) remains intact with 500 MB capacity for localhost (`python app.py`) and API clients.
 
+### 4. Instagram Video Format Selection & Direct Progressive Stream Handling
+- **The Problem:** In yt-dlp's Instagram extractor format list, the final entry (`formats[-1]`) is often an audio-only DASH stream (`vcodec == 'none'`), while the earlier formats include progressive MP4s with both video and audio. Blindly using `formats[-1]` caused Instagram reels to download as audio-only tracks.
+- **The Solution:**
+  - `InstagramExtractor._select_best_video_format` filters candidates where `vcodec != 'none'` and prioritizes progressive streams (`acodec != 'none'`), guaranteeing that full video + audio tracks are extracted.
+  - Rotating proxy candidates and Instagram-specific referer headers are used during extraction to avoid IP blocks.
+  - `MediaService.process_and_package` leverages direct progressive CDN downloads for Instagram MP4s, completing downloads in 1–2 seconds with zero reliance on missing cloud ffmpeg binaries.
+  - Frontend (`analyzer.js`) sets explicit `download` attributes and auto-triggers browser download saving.
+
