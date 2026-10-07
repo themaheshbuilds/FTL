@@ -26,6 +26,7 @@ def debug_yt():
     
     opts = YtDlpService.get_default_opts({
         "skip_download": True,
+        "ignoreerrors": False,
         "extractor_args": {
             "youtube": {
                 "player_client": [client],
@@ -46,6 +47,7 @@ def debug_yt():
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
             res["success"] = True
+            res["info_keys"] = list(info.keys()) if info else []
             res["title"] = info.get("title") if info else None
             res["formats_count"] = len(info.get("formats", [])) if info else 0
     except Exception as e:
