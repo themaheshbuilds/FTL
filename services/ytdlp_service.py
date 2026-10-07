@@ -11,26 +11,69 @@ from utils.ffmpeg_helper import get_ffmpeg_executable
 logger = get_logger("linkforge.ytdlp")
 
 
+def format_cookies_to_netscape(raw_content: str) -> str:
+    """Ensure cookie content is in Netscape format. If JSON is provided, convert automatically.
+    Also removes stale *PSIDTS tokens that trigger 'The page needs to be reloaded' errors.
+    """
+    stripped = raw_content.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        try:
+            import json
+            cookie_list = json.loads(stripped)
+            # Filter out timestamp session cookies that cause 'page needs to be reloaded'
+            filtered = [c for c in cookie_list if isinstance(c, dict) and 'PSIDTS' not in c.get('name', '')]
+            lines = ["# Netscape HTTP Cookie File"]
+            for c in filtered:
+                domain = c.get("domain", "")
+                flag = "TRUE" if domain.startswith(".") else "FALSE"
+                path = c.get("path", "/")
+                secure = "TRUE" if c.get("secure", False) else "FALSE"
+                expiry = str(int(c.get("expirationDate") or 2147483647))
+                name = c.get("name", "")
+                value = c.get("value", "")
+                if name:
+                    lines.append(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
+            return "\n".join(lines)
+        except Exception:
+            pass
+    return raw_content
+
+
 class YtDlpService:
     """Encapsulates all interaction with yt-dlp."""
 
     @classmethod
     def get_cookie_file(cls) -> Optional[str]:
-        """Discover cookies file from path or environment variable."""
+        """Discover cookies file from path or environment variable, auto-converting JSON if needed."""
+        # 1. Explicit path in env
         cookie_path = os.getenv("YOUTUBE_COOKIES_PATH") or os.getenv("COOKIES_FILE")
         if cookie_path and os.path.isfile(cookie_path):
             return cookie_path
 
+        # 2. Local JSON file in project root
+        local_json = Path(__file__).resolve().parent.parent / "www_youtube_com_cookies.json"
+        if local_json.is_file():
+            try:
+                converted = format_cookies_to_netscape(local_json.read_text(encoding="utf-8"))
+                out_txt = Path(__file__).resolve().parent.parent / "cookies.txt"
+                out_txt.write_text(converted, encoding="utf-8")
+                return str(out_txt)
+            except Exception:
+                pass
+
+        # 3. Local Netscape cookies.txt
         local_cookie = Path(__file__).resolve().parent.parent / "cookies.txt"
         if local_cookie.is_file():
             return str(local_cookie)
 
+        # 4. Raw cookies from environment variable
         raw_cookies = os.getenv("YOUTUBE_COOKIES")
         if raw_cookies:
             import tempfile
             tmp_cookie = Path(tempfile.gettempdir()) / "yt_cookies.txt"
             try:
-                tmp_cookie.write_text(raw_cookies.strip(), encoding="utf-8")
+                converted = format_cookies_to_netscape(raw_cookies)
+                tmp_cookie.write_text(converted.strip(), encoding="utf-8")
                 return str(tmp_cookie)
             except Exception:
                 pass
@@ -38,7 +81,7 @@ class YtDlpService:
 
     @classmethod
     def get_default_opts(cls, extra_opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Standardized yt-dlp options ensuring safety, ffmpeg integration, and cloud-resilient execution."""
+        """Standardized yt-dlp options ensuring safety, ffmpeg integration, and full resolution support."""
         opts = {
             "quiet": True,
             "no_warnings": True,
@@ -50,12 +93,6 @@ class YtDlpService:
             "nocheckcertificate": False,
             "windowsfilenames": True,
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios"],
-                    "player_skip": ["webpage", "configs"]
-                }
-            }
         }
 
         cookie_file = cls.get_cookie_file()
@@ -71,7 +108,6 @@ class YtDlpService:
             opts["ffmpeg_location"] = ffmpeg_bin
 
         if extra_opts:
-            # Deep merge extractor_args if present
             if "extractor_args" in extra_opts and "extractor_args" in opts:
                 merged_extractor_args = dict(opts["extractor_args"])
                 merged_extractor_args.update(extra_opts["extractor_args"])
@@ -84,18 +120,18 @@ class YtDlpService:
 
     @classmethod
     def extract_info(cls, url: str) -> Tuple[Optional[Dict[str, Any]], str]:
-        """Extract metadata without downloading files, using progressive fallback clients."""
+        """Extract metadata without downloading files, attempting full resolution first then mobile fallbacks."""
         client_configs = [
-            # 1. Primary: android + ios mobile InnerTube endpoints (bypasses bot detection & 429 webpage blocks)
+            # 1. Primary: Unrestricted clients (enables 4K, 1440p, 1080p, 720p full adaptive streams)
+            None,
+            # 2. Cloud Fallback: android + ios mobile InnerTube endpoints (bypasses bot detection on datacenter IPs)
             {"player_client": ["android", "ios"], "player_skip": ["webpage", "configs"]},
-            # 2. Fallback: dedicated android client
+            # 3. Fallback: dedicated android client
             {"player_client": ["android"], "player_skip": ["webpage", "configs"]},
-            # 3. Fallback: dedicated ios client
+            # 4. Fallback: dedicated ios client
             {"player_client": ["ios"], "player_skip": ["webpage", "configs"]},
-            # 4. Fallback: TV and web embedded endpoints
+            # 5. Fallback: TV and web embedded endpoints
             {"player_client": ["tv", "web_embedded"], "player_skip": ["webpage", "configs"]},
-            # 5. Generic yt-dlp fallback
-            {}
         ]
 
         last_error = ""
@@ -289,30 +325,38 @@ class YtDlpService:
                     "preferredquality": "192",
                 }]
         elif format_filter == "1080p":
-            custom_opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best[ext=mp4]/18/best"
-            custom_opts["merge_output_format"] = "mp4"
-            custom_opts["final_ext"] = "mp4"
             if ffmpeg_bin:
+                custom_opts["format"] = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+                custom_opts["merge_output_format"] = "mp4"
+                custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            else:
+                custom_opts["format"] = "best[height<=1080][ext=mp4]/best[ext=mp4]/18/best"
         elif format_filter == "720p":
-            custom_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4]/18/best"
-            custom_opts["merge_output_format"] = "mp4"
-            custom_opts["final_ext"] = "mp4"
             if ffmpeg_bin:
+                custom_opts["format"] = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+                custom_opts["merge_output_format"] = "mp4"
+                custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            else:
+                custom_opts["format"] = "best[height<=720][ext=mp4]/best[ext=mp4]/18/best"
         elif format_filter == "480p":
-            custom_opts["format"] = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best[ext=mp4]/18/best"
-            custom_opts["merge_output_format"] = "mp4"
-            custom_opts["final_ext"] = "mp4"
             if ffmpeg_bin:
+                custom_opts["format"] = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
+                custom_opts["merge_output_format"] = "mp4"
+                custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            else:
+                custom_opts["format"] = "best[height<=480][ext=mp4]/best[ext=mp4]/18/best"
         else:
-            # Default best video + best audio merged into mp4, with fallback to progressive mp4 (18 or best[ext=mp4])
-            custom_opts["format"] = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/18/bv*+ba/b/best"
-            custom_opts["merge_output_format"] = "mp4"
-            custom_opts["final_ext"] = "mp4"
+            # Default "best" = MAXIMUM QUALITY available (4K, 1440p, 1080p full HD merged)
             if ffmpeg_bin:
+                custom_opts["format"] = "bestvideo+bestaudio/best"
+                custom_opts["merge_output_format"] = "mp4"
+                custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            else:
+                custom_opts["format"] = "best[ext=mp4]/best/18"
 
         opts = cls.get_default_opts(custom_opts)
 

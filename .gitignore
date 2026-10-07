@@ -64,3 +64,9 @@ storage/test_generated/
 .vercel
 *-log-export-*.json
 
+# Cookies & Sensitive Credentials
+*cookies*.json
+*cookies*.txt
+cookies.txt
+
+
