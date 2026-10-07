@@ -36,3 +36,29 @@ def test_analyzer_rejects_ssrf():
     assert res.success is False
     assert res.error_code == "INVALID_URL"
     assert "loopback" in res.error_message.lower() or "internal" in res.error_message.lower()
+
+
+def test_cookie_formatting():
+    """Verify format_cookies_to_netscape handles JSON, raw Netscape, prefixes, and spaces."""
+    from services.ytdlp_service import format_cookies_to_netscape
+
+    # 1. Netscape with variable prefix and space separators
+    raw_pasted = """YOUTUBE_COOKIES = # Netscape HTTP Cookie File
+.youtube.com TRUE / TRUE 1825926295 SID fake_sid_val
+.youtube.com TRUE / TRUE 1825926295 __Secure-1PSIDTS should_be_skipped
+.youtube.com TRUE / TRUE 1825926295 HSID fake_hsid_val
+"""
+    formatted = format_cookies_to_netscape(raw_pasted)
+    lines = formatted.splitlines()
+    assert lines[0] == "# Netscape HTTP Cookie File"
+    assert len(lines) == 3  # Header + SID + HSID (PSIDTS filtered out)
+    assert "\t" in lines[1]
+    assert "SID" in lines[1]
+    assert "HSID" in lines[2]
+    assert "PSIDTS" not in formatted
+
+    # 2. JSON array input
+    json_input = '[{"domain": ".youtube.com", "name": "SID", "value": "123", "path": "/", "secure": true}]'
+    formatted_json = format_cookies_to_netscape(json_input)
+    assert "# Netscape HTTP Cookie File" in formatted_json
+    assert "SID\t123" in formatted_json

@@ -12,15 +12,26 @@ logger = get_logger("linkforge.ytdlp")
 
 
 def format_cookies_to_netscape(raw_content: str) -> str:
-    """Ensure cookie content is in Netscape format. If JSON is provided, convert automatically.
-    Also removes stale *PSIDTS tokens that trigger 'The page needs to be reloaded' errors.
+    """Ensure cookie content is in Netscape format with strict tab separation.
+    Handles JSON arrays, space-separated lines (from web form paste), leading variable names,
+    and removes unstable *PSIDTS tokens that trigger 'The page needs to be reloaded' errors.
     """
+    import re
     stripped = raw_content.strip()
+    if (stripped.startswith('"') and stripped.endswith('"')) or (stripped.startswith("'") and stripped.endswith("'")):
+        stripped = stripped[1:-1].strip()
+    if "\n" not in stripped and "\\n" in stripped:
+        stripped = stripped.replace("\\n", "\n")
+    if "\t" not in stripped and "\\t" in stripped:
+        stripped = stripped.replace("\\t", "\t")
+    # Strip variable assignments if pasted like 'YOUTUBE_COOKIES = ...'
+    stripped = re.sub(r'^\s*YOUTUBE_COOKIES\s*=\s*', '', stripped, flags=re.IGNORECASE).strip()
+
+    # Case A: JSON format [ { "domain": ".youtube.com", ... } ]
     if stripped.startswith("[") and stripped.endswith("]"):
         try:
             import json
             cookie_list = json.loads(stripped)
-            # Filter out timestamp session cookies that cause 'page needs to be reloaded'
             filtered = [c for c in cookie_list if isinstance(c, dict) and 'PSIDTS' not in c.get('name', '')]
             lines = ["# Netscape HTTP Cookie File"]
             for c in filtered:
@@ -36,7 +47,22 @@ def format_cookies_to_netscape(raw_content: str) -> str:
             return "\n".join(lines)
         except Exception:
             pass
-    return raw_content
+
+    # Case B: Netscape format (either tab-separated or space-separated from web form paste)
+    lines = ["# Netscape HTTP Cookie File"]
+    for line in stripped.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "\t" in line:
+            parts = line.split("\t")
+        else:
+            parts = re.split(r'\s+', line, maxsplit=6)
+        if len(parts) >= 7:
+            if 'PSIDTS' in parts[5]:
+                continue
+            lines.append("\t".join(parts[:7]))
+    return "\n".join(lines)
 
 
 class YtDlpService:

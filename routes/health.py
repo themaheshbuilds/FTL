@@ -22,24 +22,36 @@ def health_check():
 @health_bp.route("/api/debug_yt", methods=["GET"])
 def debug_yt():
     url = request.args.get("url", "https://youtu.be/xvT1jH8B9AM")
-    client = request.args.get("client", "android")
+    client = request.args.get("client")  # None by default = use natural/unrestricted clients
     
-    opts = YtDlpService.get_default_opts({
+    extra = {
         "skip_download": True,
         "ignoreerrors": False,
-        "extractor_args": {
+    }
+    if client:
+        extra["extractor_args"] = {
             "youtube": {
                 "player_client": [client],
                 "player_skip": ["webpage", "configs"]
             }
         }
-    })
+        
+    opts = YtDlpService.get_default_opts(extra)
+    cookie_file = YtDlpService.get_cookie_file()
+    cookies_count = 0
+    if cookie_file and os.path.exists(cookie_file):
+        try:
+            with open(cookie_file, "r", encoding="utf-8") as f:
+                cookies_count = len([line for line in f if line.strip() and not line.startswith("#")])
+        except Exception:
+            pass
     
     res = {
         "url": url,
-        "client": client,
+        "client": client or "default",
         "node": shutil.which("node"),
-        "cookies_present": bool(YtDlpService.get_cookie_file()),
+        "cookies_present": bool(cookie_file),
+        "cookies_count": cookies_count,
         "env_vercel": bool(os.getenv("VERCEL"))
     }
     

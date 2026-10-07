@@ -21,7 +21,7 @@ Active Git Branch: main
 Deployment Target: Vercel (Serverless Python via vercel.json & api/index.py)
 
 Current Phase: Phase 12 (Universal File Converter Suite) - COMPLETED
-Test Suite Status: 45 passed, 0 failed, 0 skipped (Verified via pytest on 2026-10-07)
+Test Suite Status: 46 passed, 0 failed, 0 skipped (Verified via pytest on 2026-10-07)
 Next Priorities: Phase 15 (Production Deployment & Monitoring) + Phase 13 additions (rate-limiting)
 ```
 
@@ -267,8 +267,8 @@ pytest -v
 ```
 **Current Verified Result:**
 ```text
-============================= 45 passed in 9.31s =============================
-- tests/test_analyzer.py (3/3)
+============================= 46 passed in 7.12s =============================
+- tests/test_analyzer.py (4/4) [Includes cookie normalization & SSRF tests]
 - tests/test_api.py (6/6)
 - tests/test_converter.py (7/7)
 - tests/test_filenames.py (4/4)
@@ -294,20 +294,27 @@ pytest -v
 
 ---
 
-# 10. YouTube Cloud Extraction & Serverless Upload Gotchas
+# 10. YouTube Cloud Extraction & Cookie Handling Gotchas
 
-### 1. YouTube Datacenter IP Bot Detection Bypass
-- **The Problem:** Cloud datacenter IP ranges (AWS Lambda, Vercel, GCP) are aggressively blocked by YouTube's anti-bot system. When unauthenticated queries hit YouTube from AWS Lambda, YouTube returns:
-  `ERROR: [youtube] <id>: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies for the authentication.`
-- **The Verified Solution & Setup in `services/ytdlp_service.py`:**
-  1. **Built-in `YOUTUBE_COOKIES` Support:** yt-dlp reads `YOUTUBE_COOKIES` directly from environment variables. Simply export Netscape cookies from any desktop browser via the "Get cookies.txt LOCALLY" extension, and paste into Vercel Project Settings -> Environment Variables as `YOUTUBE_COOKIES`. It writes to `/tmp/yt_cookies.txt` and fully bypasses YouTube's bot detection.
-  2. **Proxy Support:** Supports `YOUTUBE_PROXY`, `HTTP_PROXY`, or `HTTPS_PROXY` for routing through a residential or private proxy.
-  3. **Explicit Error Code (`BOT_VERIFICATION_REQUIRED`):** Instead of a generic extraction error, LinkForge detects bot challenges specifically and provides actionable guidance directing the administrator to add `YOUTUBE_COOKIES`.
-  4. **Progressive MP4 Priority (Format 18):** Setting `format: bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/18/bv*+ba/b/best` guarantees progressive stream fallback without requiring FFmpeg merging.
+### 1. YouTube Datacenter IP Bot Detection & Cookie Normalization
+- **The Problem:** Cloud datacenter IP ranges (AWS Lambda, Vercel, GCP) are blocked by YouTube with `Sign in to confirm you're not a bot`. In addition:
+  1. **Leading Variable Names:** Users frequently paste `YOUTUBE_COOKIES = # Netscape ...` directly into the environment variable field.
+  2. **Browser Form Space Conversion:** Pasting tab-separated Netscape files into browser web forms often converts tabs to multiple spaces. `MozillaCookieJar` crashes if tabs are missing.
+  3. **JSON Array Exports:** Extensions like Cookie-Editor export raw JSON arrays `[{"domain": "...", "name": "..."}]`.
+  4. **Stale PSIDTS Tokens:** `__Secure-1PSIDTS` tokens rotate rapidly and trigger `ERROR: The page needs to be reloaded`.
+  5. **InnerTube Client Incompatibility:** The `android` and `ios` InnerTube clients in `yt-dlp` explicitly do NOT support cookies (`WARNING: Skipping client 'android' since it does not support cookies`).
+- **The Solution in `services/ytdlp_service.py` (`format_cookies_to_netscape`):**
+  - Automatically strips enclosing quotes and leading `YOUTUBE_COOKIES = ` variable assignments.
+  - Automatically unescapes literal `\n` and `\t` sequences.
+  - Automatically transforms JSON cookie arrays into valid Netscape tab-separated lines.
+  - Automatically re-splits space-separated Netscape lines and re-joins them with strict `\t` tabs.
+  - Filters out unstable `PSIDTS` tokens while retaining core session credentials (`LOGIN_INFO`, `SID`, `HSID`, `SSID`, `SAPISID`, etc.).
+  - Permits natural, unrestricted clients (`web`, `mweb`, `tv_embedded`, `visionos`) so cookies authenticate cleanly and extract full resolution formats up to 4K/2K.
 
-### 2. Vercel 4.5 MB Payload Limit & Non-JSON Handling
-- **The Problem:** Vercel Serverless Functions enforce a strict 4.5 MB maximum payload limit for request bodies. When uploading files larger than 4.5 MB to `/api/convert`, Vercel's edge proxy immediately terminates the request and returns a plain text `413 Request Entity Too Large` error. Calling `await response.json()` without checking content-type throws `SyntaxError: Unexpected token 'R', "Request En"... is not valid JSON`.
-- **The Solution:**
-  1. In `static/js/converter.js` (and `analyzer.js`, `downloader.js`), the response status is checked for `413` specifically: displaying a helpful message (`"File exceeds the serverless upload limit (4.5 MB on Vercel). Please upload a smaller file."`).
-  2. Before invoking `.json()`, `response.headers.get("content-type")` is inspected. If not `application/json`, the error message is extracted as text (`await response.text()`), preventing JavaScript syntax exceptions.
+### 2. Max Resolution Downloading
+- Standard `yt-dlp` options now use unrestricted clients and `bestvideo+bestaudio/best` (merged into MP4 via FFmpeg), delivering true maximum resolution (1080p/2K/4K, ~218 MB+) instead of mobile 360p (11 MB).
+
+### 3. Vercel 4.5 MB Payload Limit & Non-JSON Handling
+- Vercel Serverless Functions enforce a strict 4.5 MB maximum payload limit for request bodies. Large file conversions return `413 Request Entity Too Large`.
+- Frontend checks `response.status === 413` and inspects `content-type` before invoking `.json()`, preventing syntax crashes.
 
