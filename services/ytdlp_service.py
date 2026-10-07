@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import yt_dlp
 from models.result import AnalysisResult
 from models.media import MediaItem
@@ -62,6 +62,10 @@ class YtDlpService:
         if cookie_file:
             opts["cookiefile"] = cookie_file
 
+        proxy = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+        if proxy:
+            opts["proxy"] = proxy
+
         ffmpeg_bin = get_ffmpeg_executable()
         if ffmpeg_bin:
             opts["ffmpeg_location"] = ffmpeg_bin
@@ -79,7 +83,7 @@ class YtDlpService:
         return opts
 
     @classmethod
-    def extract_info(cls, url: str) -> Optional[Dict[str, Any]]:
+    def extract_info(cls, url: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """Extract metadata without downloading files, using progressive fallback clients."""
         client_configs = [
             # 1. Primary: android + ios mobile InnerTube endpoints (bypasses bot detection & 429 webpage blocks)
@@ -94,33 +98,46 @@ class YtDlpService:
             {}
         ]
 
+        last_error = ""
         for config in client_configs:
             try:
-                extra = {"skip_download": True}
+                extra = {"skip_download": True, "ignoreerrors": False}
                 if config:
                     extra["extractor_args"] = {"youtube": config}
                 opts = cls.get_default_opts(extra)
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
-                    if info:
-                        return info
+                    if info and info.get("title"):
+                        return info, ""
             except Exception as e:
+                last_error = str(e)
                 logger.warning(f"yt-dlp extraction trial failed for {url} with client config {config}: {e}")
 
-        return None
+        return None, last_error
 
 
     @classmethod
     def analyze_url(cls, url: str, platform_hint: str = "Platform") -> AnalysisResult:
         """Analyze URL through yt-dlp and return structured AnalysisResult."""
-        info = cls.extract_info(url)
+        info, last_error = cls.extract_info(url)
         if not info:
+            is_bot_blocked = "sign in to confirm you" in last_error.lower() or "bot" in last_error.lower()
+            if is_bot_blocked:
+                err_code = "BOT_VERIFICATION_REQUIRED"
+                err_msg = (
+                    "YouTube anti-bot verification blocked this cloud request ('Sign in to confirm you\'re not a bot'). "
+                    "On cloud hosting (Vercel), add your YOUTUBE_COOKIES in Vercel Environment Variables to authenticate."
+                )
+            else:
+                err_code = "EXTRACTION_FAILED"
+                err_msg = "Could not extract public media from this URL. Content may be private, require login, or be unsupported."
+
             return AnalysisResult(
                 success=False,
                 platform=platform_hint,
                 content_type="unknown",
-                error_code="EXTRACTION_FAILED",
-                error_message="Could not extract public media from this URL. Content may be private, require login, or be unsupported."
+                error_code=err_code,
+                error_message=err_msg
             )
 
         # Detect playlist / multi-entries
