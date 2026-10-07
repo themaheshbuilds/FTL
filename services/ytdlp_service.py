@@ -27,14 +27,16 @@ def format_cookies_to_netscape(raw_content: str) -> str:
     # Strip variable assignments if pasted like 'YOUTUBE_COOKIES = ...'
     stripped = re.sub(r'^\s*YOUTUBE_COOKIES\s*=\s*', '', stripped, flags=re.IGNORECASE).strip()
 
+    lines = ["# Netscape HTTP Cookie File"]
+
     # Case A: JSON format [ { "domain": ".youtube.com", ... } ]
     if stripped.startswith("[") and stripped.endswith("]"):
         try:
             import json
             cookie_list = json.loads(stripped)
-            filtered = [c for c in cookie_list if isinstance(c, dict) and 'PSIDTS' not in c.get('name', '')]
-            lines = ["# Netscape HTTP Cookie File"]
-            for c in filtered:
+            for c in cookie_list:
+                if not isinstance(c, dict) or 'PSIDTS' in c.get('name', ''):
+                    continue
                 domain = c.get("domain", "")
                 flag = "TRUE" if domain.startswith(".") else "FALSE"
                 path = c.get("path", "/")
@@ -44,24 +46,22 @@ def format_cookies_to_netscape(raw_content: str) -> str:
                 value = c.get("value", "")
                 if name:
                     lines.append(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
-            return "\n".join(lines)
         except Exception:
             pass
-
-    # Case B: Netscape format (either tab-separated or space-separated from web form paste)
-    lines = ["# Netscape HTTP Cookie File"]
-    for line in stripped.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "\t" in line:
-            parts = line.split("\t")
-        else:
-            parts = re.split(r'\s+', line, maxsplit=6)
-        if len(parts) >= 7:
-            if 'PSIDTS' in parts[5]:
+    else:
+        # Case B: Netscape format (either tab-separated or space-separated from web form paste)
+        for line in stripped.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
                 continue
-            lines.append("\t".join(parts[:7]))
+            if "\t" in line:
+                parts = line.split("\t")
+            else:
+                parts = re.split(r'\s+', line, maxsplit=6)
+            if len(parts) >= 7:
+                if 'PSIDTS' in parts[5]:
+                    continue
+                lines.append("\t".join(parts[:7]))
 
     # Ensure non-secure SID and APISID are present (needed by yt-dlp if only secure cookies were captured)
     has_sid = any(len(l.split("\t")) >= 6 and l.split("\t")[5] == "SID" for l in lines)

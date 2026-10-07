@@ -101,4 +101,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === aboutModal) aboutModal.style.display = "none";
         if (e.target === platformsModal) platformsModal.style.display = "none";
     });
+
+    // Check for ?url= query parameter (e.g. from fallback bridge)
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryUrl = urlParams.get("url");
+    if (queryUrl && queryUrl.trim()) {
+        urlInput.value = queryUrl.trim();
+        clearBtn.style.display = "inline-block";
+        Analyzer.analyze(queryUrl.trim());
+    }
 });
