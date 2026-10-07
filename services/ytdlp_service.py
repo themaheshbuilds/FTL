@@ -83,8 +83,40 @@ def format_cookies_to_netscape(raw_content: str) -> str:
     return "\n".join(lines)
 
 
+def parse_proxies(raw_proxy_env: str) -> List[str]:
+    """Parse proxy environment variable supporting single URLs, comma/newline separated lists,
+    and raw Webshare IP:Port:Username:Password format.
+    """
+    if not raw_proxy_env or not raw_proxy_env.strip():
+        return []
+    import re
+    results = []
+    tokens = re.split(r'[\r\n,]+', raw_proxy_env.strip())
+    for token in tokens:
+        token = token.strip()
+        if not token:
+            continue
+        if token.startswith("http://") or token.startswith("https://") or token.startswith("socks5://"):
+            results.append(token)
+        else:
+            parts = token.split(":")
+            if len(parts) == 4:
+                ip, port, user, pwd = parts
+                results.append(f"http://{user}:{pwd}@{ip}:{port}")
+            elif len(parts) == 2:
+                ip, port = parts
+                results.append(f"http://{ip}:{port}")
+    return results
+
+
 class YtDlpService:
     """Encapsulates all interaction with yt-dlp."""
+
+    @classmethod
+    def get_active_proxies(cls) -> List[str]:
+        """Return list of parsed proxies from environment variables."""
+        raw = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+        return parse_proxies(raw) if raw else []
 
     @classmethod
     def get_cookie_file(cls) -> Optional[str]:
@@ -149,9 +181,10 @@ class YtDlpService:
         if cookie_file:
             opts["cookiefile"] = cookie_file
 
-        proxy = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
-        if proxy:
-            opts["proxy"] = proxy
+        proxies = cls.get_active_proxies()
+        if proxies:
+            import random
+            opts["proxy"] = random.choice(proxies)
 
         po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
         if po_token:
@@ -190,21 +223,27 @@ class YtDlpService:
         ]
 
         last_error = ""
+        proxies = cls.get_active_proxies()
+
         for config, use_cookies in client_configs:
-            try:
-                extra = {"skip_download": True, "ignoreerrors": False}
-                if config:
-                    extra["extractor_args"] = {"youtube": config}
-                opts = cls.get_default_opts(extra)
-                if not use_cookies:
-                    opts.pop("cookiefile", None)
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                    if info and info.get("title"):
-                        return info, ""
-            except Exception as e:
-                last_error = str(e)
-                logger.warning(f"yt-dlp extraction trial failed for {url} with client config {config} (use_cookies={use_cookies}): {e}")
+            proxy_candidates = list(proxies) if proxies else [None]
+            for current_proxy in proxy_candidates[:3]:
+                try:
+                    extra = {"skip_download": True, "ignoreerrors": False}
+                    if config:
+                        extra["extractor_args"] = {"youtube": config}
+                    if current_proxy:
+                        extra["proxy"] = current_proxy
+                    opts = cls.get_default_opts(extra)
+                    if not use_cookies:
+                        opts.pop("cookiefile", None)
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        if info and info.get("title"):
+                            return info, ""
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(f"yt-dlp extraction trial failed for {url} with client {config} (proxy={bool(current_proxy)}, use_cookies={use_cookies}): {e}")
 
         return None, last_error
 

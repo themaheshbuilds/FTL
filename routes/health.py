@@ -57,7 +57,8 @@ def debug_yt():
         "node": shutil.which("node"),
         "cookies_present": bool(cookie_file),
         "cookies_count": cookies_count,
-        "proxy_configured": bool(os.getenv("YOUTUBE_PROXY")),
+        "proxy_configured": len(YtDlpService.get_active_proxies()) > 0,
+        "proxies_count": len(YtDlpService.get_active_proxies()),
         "env_vercel": bool(os.getenv("VERCEL"))
     }
     
