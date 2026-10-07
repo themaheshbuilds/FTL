@@ -153,6 +153,11 @@ class YtDlpService:
         if proxy:
             opts["proxy"] = proxy
 
+        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        if po_token:
+            token_val = [f"web.gvs+{po_token}", f"web.player+{po_token}"] if not po_token.startswith("web.") else [po_token]
+            opts["extractor_args"] = {"youtube": {"po_token": token_val}}
+
         ffmpeg_bin = get_ffmpeg_executable()
         if ffmpeg_bin:
             opts["ffmpeg_location"] = ffmpeg_bin
