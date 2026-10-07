@@ -62,6 +62,24 @@ def format_cookies_to_netscape(raw_content: str) -> str:
             if 'PSIDTS' in parts[5]:
                 continue
             lines.append("\t".join(parts[:7]))
+
+    # Ensure non-secure SID and APISID are present (needed by yt-dlp if only secure cookies were captured)
+    has_sid = any(len(l.split("\t")) >= 6 and l.split("\t")[5] == "SID" for l in lines)
+    if not has_sid:
+        for l in list(lines):
+            parts = l.split("\t")
+            if len(parts) >= 7 and parts[5] in ("__Secure-1PSID", "__Secure-3PSID"):
+                lines.append(f"{parts[0]}\t{parts[1]}\t{parts[2]}\tFALSE\t{parts[4]}\tSID\t{parts[6]}")
+                break
+
+    has_apisid = any(len(l.split("\t")) >= 6 and l.split("\t")[5] == "APISID" for l in lines)
+    if not has_apisid:
+        for l in list(lines):
+            parts = l.split("\t")
+            if len(parts) >= 7 and parts[5] in ("SAPISID", "__Secure-1PAPISID", "__Secure-3PAPISID"):
+                lines.append(f"{parts[0]}\t{parts[1]}\t{parts[2]}\tFALSE\t{parts[4]}\tAPISID\t{parts[6]}")
+                break
+
     return "\n".join(lines)
 
 
@@ -154,16 +172,16 @@ class YtDlpService:
     def extract_info(cls, url: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """Extract metadata without downloading files, attempting full resolution first then mobile fallbacks."""
         client_configs = [
-            # 1. Primary: Unrestricted clients with cookies (enables 4K, 1440p, 1080p, 720p full adaptive streams)
-            (None, True),
-            # 2. Web clients with cookies
-            ({"player_client": ["web", "mweb"]}, True),
-            # 3. Cloud Fallback: android mobile client WITHOUT cookies (mobile clients reject cookies, but bypass datacenter blocks)
+            # 1. Primary: Default web/visionos/safari clients without TV client (avoids "page needs to be reloaded")
+            ({"player_client": ["default", "-tv"]}, True),
+            # 2. VisionOS client with cookies (unrestricted 4K streams)
+            ({"player_client": ["visionos"]}, True),
+            # 3. Safari client with cookies
+            ({"player_client": ["safari"]}, True),
+            # 4. Cloud Fallback: android mobile client WITHOUT cookies (mobile clients reject cookies, but bypass datacenter blocks)
             ({"player_client": ["android"], "player_skip": ["webpage", "configs"]}, False),
-            # 4. Fallback: dedicated ios client WITHOUT cookies
+            # 5. Fallback: dedicated ios client WITHOUT cookies
             ({"player_client": ["ios"], "player_skip": ["webpage", "configs"]}, False),
-            # 5. Fallback: TV embedded endpoints
-            ({"player_client": ["tv_embedded"], "player_skip": ["webpage", "configs"]}, False),
         ]
 
         last_error = ""
