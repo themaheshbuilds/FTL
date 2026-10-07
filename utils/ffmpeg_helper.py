@@ -58,6 +58,7 @@ def remux_video(
             cmd = [
                 ffmpeg_bin, "-y", "-i", input_file,
                 "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0",
+                "-deadline", "realtime", "-cpu-used", "5",
                 "-c:a", "libopus", "-b:a", "128k"
             ]
             if caption:

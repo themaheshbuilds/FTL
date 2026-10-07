@@ -154,10 +154,10 @@ class InstagramExtractor(BaseExtractor):
 
             if has_videos and has_images:
                 content_type = "mixed"
-                available_formats = ["zip", "images_pdf", "images_zip", "mp4"]
+                available_formats = ["zip", "mp4", "mkv", "images_pdf", "images_zip"]
             elif has_videos:
                 content_type = "video_collection"
-                available_formats = ["zip", "mp4"]
+                available_formats = ["zip", "mp4", "mkv"]
             else:
                 content_type = "image_collection"
                 available_formats = ["pdf", "docx", "zip", "images"]

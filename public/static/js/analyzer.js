@@ -240,23 +240,22 @@ const Analyzer = {
         const formatActions = document.getElementById("format-actions");
         formatActions.innerHTML = "";
 
-        const formatLabels = {
-            "original": "Original File",
-            "images": "All Images (ZIP)",
-            "zip": isCollection ? `Download ZIP (${count} Files)` : "Download as ZIP",
-            "pdf": isCollection ? `Convert to PDF (${count} Pages)` : "Convert to PDF",
-            "docx": isCollection ? `Word Document (${count} Pages)` : "Word Document (.docx)",
-            "doc": "Word Document (.docx)",
-            "mp4": "Download MP4",
-            "mkv": "Download MKV",
-            "webm": "Download WebM",
-            "video": "Download Video",
-            "audio": "Download Audio (MP3)",
-            "mp3": "Download MP3 Audio",
-            "m4a": "Download M4A Audio",
-            "images_zip": `Images as ZIP (${count} Files)`,
-            "images_pdf": `Images as PDF (${count} Pages)`,
-            "all_zip": `Download Everything (${count} Files)`
+        const formatConfig = {
+            "mp4": { label: "Standard Video", ext: ".mp4", icon: "🎬" },
+            "mkv": { label: "Matroska Video", ext: ".mkv", icon: "🎞️" },
+            "webm": { label: "WebM Video", ext: ".webm", icon: "🌐" },
+            "video": { label: "Video", ext: ".mp4", icon: "🎬" },
+            "audio": { label: "Audio Track", ext: ".mp3", icon: "🎵" },
+            "mp3": { label: "MP3 Audio", ext: ".mp3", icon: "🎵" },
+            "m4a": { label: "AAC Audio", ext: ".m4a", icon: "🎧" },
+            "pdf": { label: isCollection ? `Convert to PDF (${count} Pages)` : "PDF Document", ext: ".pdf", icon: "📄" },
+            "images_pdf": { label: `Images as PDF (${count} Pages)`, ext: ".pdf", icon: "📄" },
+            "docx": { label: isCollection ? `Word Doc (${count} Pages)` : "Word Document", ext: ".docx", icon: "📝" },
+            "doc": { label: "Word Document", ext: ".docx", icon: "📝" },
+            "zip": { label: isCollection ? `ZIP Archive (${count} Files)` : "Download as ZIP", ext: ".zip", icon: "🗂️" },
+            "images_zip": { label: `Images ZIP (${count} Files)`, ext: ".zip", icon: "🗂️" },
+            "images": { label: `All Images (${count} Files)`, ext: ".zip", icon: "🗂️" },
+            "all_zip": { label: `Complete ZIP (${count} Files)`, ext: ".zip", icon: "🗂️" }
         };
 
         const formats = Array.isArray(data.formats) && data.formats.length > 0
@@ -269,19 +268,41 @@ const Analyzer = {
             btn.className = "format-btn";
             btn.dataset.format = formatKey;
 
-            let icon = "📦";
-            if (formatKey.includes("pdf")) icon = "📄";
-            else if (formatKey.includes("doc")) icon = "📝";
-            else if (formatKey.includes("zip")) icon = "🗂️";
-            else if (formatKey === "mp4") icon = "🎬";
-            else if (formatKey === "mkv") icon = "🎞️";
-            else if (formatKey === "webm") icon = "🌐";
-            else if (formatKey.includes("video")) icon = "🎬";
-            else if (formatKey.includes("audio") || formatKey === "mp3") icon = "🎵";
-            else if (formatKey === "m4a") icon = "🎧";
-            else if (formatKey.includes("image")) icon = "🖼️";
+            const cfg = formatConfig[formatKey] || {};
+            let icon = cfg.icon || "📦";
+            let label = cfg.label;
+            let ext = cfg.ext;
 
-            btn.innerHTML = `<span>${icon}</span> <span>${formatLabels[formatKey] || formatKey.toUpperCase()}</span>`;
+            if (!ext) {
+                if (formatKey.includes("pdf")) { ext = ".pdf"; icon = "📄"; }
+                else if (formatKey.includes("doc")) { ext = ".docx"; icon = "📝"; }
+                else if (formatKey.includes("zip")) { ext = ".zip"; icon = "🗂️"; }
+                else if (formatKey.includes("mp4")) { ext = ".mp4"; icon = "🎬"; }
+                else if (formatKey.includes("mkv")) { ext = ".mkv"; icon = "🎞️"; }
+                else if (formatKey.includes("webm")) { ext = ".webm"; icon = "🌐"; }
+                else if (formatKey.includes("audio") || formatKey === "mp3") { ext = ".mp3"; icon = "🎵"; }
+                else if (formatKey === "m4a") { ext = ".m4a"; icon = "🎧"; }
+                else {
+                    let itemExt = "";
+                    if (data.items && data.items[0] && data.items[0].filename) {
+                        const parts = data.items[0].filename.split(".");
+                        if (parts.length > 1) itemExt = parts.pop().toLowerCase();
+                    }
+                    ext = itemExt ? `.${itemExt}` : `.${formatKey.toLowerCase()}`;
+                }
+            }
+
+            if (!label) {
+                label = formatKey === "original" ? "Original File" : formatKey.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+            }
+
+            btn.innerHTML = `
+                <span class="format-btn-left">
+                    <span class="format-btn-icon">${icon}</span>
+                    <span class="format-btn-label">${label}</span>
+                </span>
+                <span class="format-btn-ext">${ext}</span>
+            `;
 
             btn.addEventListener("click", () => this.handleFormatSelection(formatKey));
             formatActions.appendChild(btn);

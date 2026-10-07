@@ -141,9 +141,10 @@ class MediaService:
                 video_container = "mkv" if format_lower == "mkv" else ("webm" if format_lower == "webm" else "mp4")
 
                 target_format = "audio" if is_audio else quality
+                downloaded_file: Optional[str] = None
 
-                # 1. For Instagram MP4 videos, try direct fast download of progressive stream first
-                if analysis.platform == "Instagram" and format_lower == "mp4" and analysis.items:
+                # 1. For Instagram videos/audio, try direct fast download of progressive stream first
+                if analysis.platform == "Instagram" and analysis.items and format_lower in ("mp4", "mkv", "webm", "video", "audio", "mp3", "m4a"):
                     target_item = next((item for item in analysis.items if item.media_type in ("video", "audio")), analysis.items[0])
                     if target_item and target_item.url and target_item.url.startswith("http"):
                         logger.info(f"Directly fetching Instagram progressive video stream: {target_item.filename}")
@@ -184,6 +185,9 @@ class MediaService:
                             final_path = str(gen_dir / final_name)
                             shutil.move(downloaded_file, final_path)
                             audio_ext = curr_ext
+                        elif os.path.exists(downloaded_file):
+                            import shutil
+                            shutil.copy2(downloaded_file, final_path)
                         else:
                             return False, None, None, None, None, f"Failed to extract {audio_ext.upper()} audio."
 
@@ -199,17 +203,14 @@ class MediaService:
 
                 ok = remux_video(downloaded_file, final_path, target_format=video_container, caption=caption_text)
                 if not ok or not os.path.exists(final_path):
-                    # Direct move fallback if remux was not needed or ffmpeg is unavailable
+                    # Direct move/copy fallback if remux was not needed or ffmpeg is unavailable
                     curr_ext = os.path.splitext(downloaded_file)[1].lstrip('.').lower()
                     if curr_ext == video_container:
                         import shutil
                         shutil.move(downloaded_file, final_path)
                     elif os.path.exists(downloaded_file):
                         import shutil
-                        final_name = f"{safe_base}.{curr_ext}"
-                        final_path = str(gen_dir / final_name)
-                        shutil.move(downloaded_file, final_path)
-                        video_container = curr_ext
+                        shutil.copy2(downloaded_file, final_path)
                     else:
                         return False, None, None, None, None, f"Failed to package video into {video_container.upper()}."
 

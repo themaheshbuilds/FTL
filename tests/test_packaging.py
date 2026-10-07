@@ -134,3 +134,40 @@ def test_media_service_docx_and_custom_filename(tmp_path):
             assert mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             assert size is not None and size > 0
 
+
+def test_media_service_mkv_packaging(tmp_path):
+    """Test MediaService packaging video into MKV container with correct MIME and extension."""
+    from unittest.mock import patch
+    from models.result import AnalysisResult
+    from models.media import MediaItem
+    from services.media_service import MediaService
+
+    fake_video = tmp_path / "dummy_reel.mp4"
+    fake_video.write_bytes(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00" + b"A" * 150000)
+
+    items = [
+        MediaItem(url="https://instagram.com/reel_vid.mp4", media_type="video", filename="dummy_reel.mp4")
+    ]
+    fake_result = AnalysisResult(
+        success=True,
+        platform="Instagram",
+        content_type="video",
+        media_count=1,
+        items=items,
+        title="Trending Reel",
+        description="Epic video moment"
+    )
+
+    with patch("services.url_analyzer.UrlAnalyzer.analyze_url", return_value=fake_result):
+        with patch("services.generic_downloader.GenericDownloader.download_file", return_value=(True, str(fake_video), None)):
+            ok, job_id, filename, mime, size, err = MediaService.process_and_package(
+                url="https://www.instagram.com/reel/DeKey7XS1dU/",
+                output_format="mkv"
+            )
+
+            assert ok is True, f"Packaging failed: {err}"
+            assert filename.endswith(".mkv"), f"Expected .mkv filename, got {filename}"
+            assert mime == "video/x-matroska", f"Expected video/x-matroska, got {mime}"
+            assert size is not None and size > 0
+
+

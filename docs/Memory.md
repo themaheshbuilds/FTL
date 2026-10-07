@@ -330,3 +330,15 @@ pytest -v
   - `MediaService.process_and_package` leverages direct progressive CDN downloads for Instagram MP4s, completing downloads in 1–2 seconds with zero reliance on missing cloud ffmpeg binaries.
   - Frontend (`analyzer.js`) sets explicit `download` attributes and auto-triggers browser download saving.
 
+### 5. MKV / WebM Video Container Packaging & Dynamic Extension Badges
+- **The Problem:** 
+  1. In `services/media_service.py`, `downloaded_file` was only assigned inside an `if format_lower == "mp4"` condition. When users requested `mkv` or `webm`, `downloaded_file` remained unassigned, throwing `UnboundLocalError: cannot access local variable 'downloaded_file' where it is not associated with a value` when evaluating yt-dlp fallbacks.
+  2. In addition, when remuxing wasn't needed or on environments lacking `ffmpeg`, fallback container logic renamed `.mkv` downloads back to `.mp4`.
+  3. Format selection buttons previously showed plain generic text without explicit extension indicators, making it hard to see what file extension would be produced.
+- **The Solution:**
+  1. `downloaded_file = None` is initialized upfront before container checks.
+  2. Instagram direct progressive CDN stream retrieval is expanded to all video and audio containers (`mp4`, `mkv`, `webm`, `video`, `audio`, `mp3`, `m4a`), fetching the high-speed source stream in seconds.
+  3. Matroska container packaging (`remux_video` in `utils/ffmpeg_helper.py`) losslessly remuxes via `-c copy` (<0.1s), delivering genuine MKV files (`video/x-matroska`). If `ffmpeg` is missing, resilient copy fallback preserves the target container extension (`.mkv`).
+  4. Frontend UI (`static/js/analyzer.js` and `public/static/js/analyzer.js`) now dynamically parses and displays dedicated format extension badges (e.g., `Video` + `.mp4`, `Matroska Video` + `.mkv`, `WebM Video` + `.webm`, `Audio Track` + `.mp3`, `PDF Document` + `.pdf`, `ZIP Archive` + `.zip`) styled with `.format-btn-ext` badge pill tokens.
+
+
