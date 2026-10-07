@@ -418,7 +418,7 @@ class YtDlpService:
                 custom_opts["postprocessors"] = [{
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "mp3",
-                    "preferredquality": "192",
+                    "preferredquality": "320",
                 }]
         elif format_filter == "1080p":
             if ffmpeg_bin:
