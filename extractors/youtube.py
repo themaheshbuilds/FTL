@@ -10,21 +10,20 @@ YOUTUBE_PATTERN = re.compile(r"(?:www\.)?(?:youtube\.com|youtu\.be)", re.IGNOREC
 
 
 class YouTubeExtractor(BaseExtractor):
-    """Extractor for YouTube videos, shorts, and playlists."""
+    """Extractor for YouTube videos, shorts, and playlists (Coming Soon)."""
 
     def can_handle(self, url: str) -> bool:
         hostname = (urlparse(url).hostname or "").lower()
         return bool(YOUTUBE_PATTERN.search(hostname))
 
     def analyze(self, url: str) -> AnalysisResult:
-        result = YtDlpService.analyze_url(url, platform_hint="YouTube")
-        # Ensure YouTube specific formatting
-        if result.success and "mp4" not in result.formats:
-            result.formats.append("mp4")
-        if result.success and "audio" not in result.formats:
-            result.formats.append("audio")
-        return result
+        return AnalysisResult(
+            success=False,
+            platform="YouTube",
+            content_type="unknown",
+            error_code="COMING_SOON",
+            error_message="YouTube video downloader is coming soon! We are actively working on it."
+        )
 
     def extract(self, url: str) -> List[MediaItem]:
-        res = self.analyze(url)
-        return res.items if res.success else []
+        return []

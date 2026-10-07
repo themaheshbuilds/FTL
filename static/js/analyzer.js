@@ -339,6 +339,25 @@ const Analyzer = {
     showError(message, code) {
         this.hideAllSections();
         const errorCard = document.getElementById("error-card");
+        const errorTitle = document.getElementById("error-title");
+        const errorBadge = errorCard.querySelector(".error-icon-badge");
+
+        if (code === "COMING_SOON") {
+            if (errorTitle) errorTitle.textContent = "YouTube Downloader — Coming Soon!";
+            if (errorBadge) {
+                errorBadge.textContent = "🚀";
+                errorBadge.style.backgroundColor = "rgba(37, 99, 235, 0.15)";
+                errorBadge.style.color = "var(--brand-primary)";
+            }
+        } else {
+            if (errorTitle) errorTitle.textContent = "Unable to access this content";
+            if (errorBadge) {
+                errorBadge.textContent = "⚠️";
+                errorBadge.style.backgroundColor = "var(--accent-rose-light)";
+                errorBadge.style.color = "var(--accent-rose)";
+            }
+        }
+
         document.getElementById("error-message").textContent = message;
 
         const fallbackContainer = document.getElementById("error-fallback-container");
