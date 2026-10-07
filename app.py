@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from flask import Flask, jsonify
 from config import get_config, Config
 from routes.health import health_bp
@@ -9,11 +10,17 @@ from routes.converter import converter_bp
 from utils.logging import setup_logging, get_logger
 
 logger = get_logger("linkforge.app")
+BASE_DIR = Path(__file__).resolve().parent
 
 
 def create_app(config_object=None) -> Flask:
     """Application factory for LinkForge."""
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        template_folder=str(BASE_DIR / "templates"),
+        static_folder=str(BASE_DIR / "static"),
+        static_url_path="/static"
+    )
 
     # Load configuration
     if config_object is None:
@@ -24,7 +31,10 @@ def create_app(config_object=None) -> Flask:
     setup_logging(app.config.get("LOG_LEVEL", "INFO"))
 
     # Ensure storage directories exist
-    config_object.ensure_storage_dirs()
+    try:
+        config_object.ensure_storage_dirs()
+    except Exception as e:
+        logger.warning(f"Could not initialize local storage dirs: {e}")
 
     # Register blueprints
     app.register_blueprint(health_bp)

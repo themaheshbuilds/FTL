@@ -1,0 +1,9 @@
+tests/
+docs/
+scratch/
+.pytest_cache/
+__pycache__/
+*.pyc
+.git
+.gitignore
+AGENTS.md

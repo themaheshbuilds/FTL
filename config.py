@@ -16,8 +16,17 @@ class Config:
     FLASK_ENV = os.getenv("FLASK_ENV", "production")
     DEBUG = os.getenv("FLASK_DEBUG", "0").lower() in ("1", "true", "yes")
 
+    # Serverless environment detection
+    IS_SERVERLESS = bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("VERCEL_REGION")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("LAMBDA_TASK_ROOT")
+    )
+
     # Storage paths
-    if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    if IS_SERVERLESS:
         TEMP_STORAGE_DIR = Path(os.getenv("TEMP_STORAGE_DIR", "/tmp/linkforge/temp")).resolve()
         GENERATED_STORAGE_DIR = Path(os.getenv("GENERATED_STORAGE_DIR", "/tmp/linkforge/generated")).resolve()
     else:
@@ -42,8 +51,11 @@ class Config:
             # Fallback for read-only serverless filesystems (e.g. Vercel)
             cls.TEMP_STORAGE_DIR = Path("/tmp/linkforge/temp").resolve()
             cls.GENERATED_STORAGE_DIR = Path("/tmp/linkforge/generated").resolve()
-            cls.TEMP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-            cls.GENERATED_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                cls.TEMP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+                cls.GENERATED_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
 
 
 class DevelopmentConfig(Config):

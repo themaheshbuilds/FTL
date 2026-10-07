@@ -279,3 +279,17 @@ pytest -v
 - tests/test_packaging.py (5/5)
 - tests/test_security.py (4/4)
 ```
+
+---
+
+# 9. Vercel Serverless Architecture & Deployment Gotchas
+
+### Serverless Function Configuration
+- **Entrypoint:** `api/index.py` boots the Flask application object `app` from root `app.py`.
+- **Defensive Cold-Start Wrapper:** `api/index.py` wraps `from app import app` in `try...except` and returns actionable diagnostic JSON with `BOOTSTRAP_ERROR` and tracebacks if an uncaught import error occurs, avoiding generic 500 FUNCTION_INVOCATION_FAILED screens.
+- **Template Bundling:** `vercel.json` configures `"functions": { "api/index.py": { "includeFiles": "templates/**", "maxDuration": 30 } }` to ensure Jinja templates are packaged in AWS Lambda `/var/task`.
+- **Static Assets via CDN:** Static assets are mirrored into `public/static/` so Vercel Edge CDN serves CSS and JavaScript directly without cold starts.
+- **Rewrites:** `vercel.json` routes `"/(.*)"` to `"/api/index.py"`.
+- **Serverless Storage:** Lambda filesystems are read-only except `/tmp`. `config.py` detects serverless runtimes (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `LAMBDA_TASK_ROOT`, etc.) and automatically routes `TEMP_STORAGE_DIR` and `GENERATED_STORAGE_DIR` to `/tmp/linkforge/...` with resilient fallback handling.
+- **Dependencies:** `pytest` is excluded from production `requirements.txt` to keep the deployment package lightweight. `.vercelignore` excludes tests, scratch scripts, docs, and git files.
+
