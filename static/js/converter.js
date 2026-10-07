@@ -384,6 +384,18 @@ const Converter = {
                 body: formData
             });
 
+            if (response.status === 413) {
+                this.showError("File exceeds the serverless upload limit (4.5 MB on Vercel). Please upload a smaller file.");
+                return;
+            }
+
+            const contentType = response.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                const text = await response.text();
+                this.showError(text || `Server returned error (${response.status})`);
+                return;
+            }
+
             const data = await response.json();
 
             if (!response.ok || !data.success) {

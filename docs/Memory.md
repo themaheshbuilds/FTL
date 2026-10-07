@@ -292,3 +292,21 @@ pytest -v
 - **Serverless Storage:** Lambda filesystems are read-only except `/tmp`. `config.py` detects serverless runtimes (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `LAMBDA_TASK_ROOT`, etc.) and automatically routes `TEMP_STORAGE_DIR` and `GENERATED_STORAGE_DIR` to `/tmp/linkforge/...` with resilient fallback handling.
 - **Dependencies:** `beautifulsoup4` is required for LinkedIn & generic HTML metadata extraction; `pytest` is excluded from production `requirements.txt` to keep the deployment package lightweight. `.vercelignore` excludes tests, scratch scripts, docs, and git files.
 
+---
+
+# 10. YouTube Cloud Extraction & Serverless Upload Gotchas
+
+### 1. YouTube Datacenter IP Bot Detection Bypass
+- **The Problem:** Cloud datacenter IP ranges (AWS Lambda, Vercel, GCP) are flagged by YouTube's web bot detection systems. When requests use the desktop `web` player client, YouTube responds with `HTTP Error 429: Too Many Requests`, JS signature/n-token challenges, or `Sign in to confirm you're not a bot`.
+- **The Solution in `services/ytdlp_service.py`:**
+  1. **Mobile InnerTube Clients:** yt-dlp is configured with `extractor_args: {"youtube": {"player_client": ["android", "ios"], "player_skip": ["webpage", "configs"]}}`. This routes queries directly through YouTube's mobile app API endpoints, bypassing web page scrapers, JS signature solver requirements, and IP-level web bot blocks.
+  2. **Multi-Stage Fallback Sequence:** `extract_info()` progressively attempts: (1) `android + ios`, (2) dedicated `android`, (3) dedicated `ios`, (4) `tv + web_embedded`, and (5) generic yt-dlp fallback.
+  3. **Progressive MP4 Priority (Format 18):** On serverless environments lacking FFmpeg binaries, downloading separate audio + video streams fails on remuxing. Setting `format: bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/18/bv*+ba/b/best` guarantees immediate fallback to YouTube's progressive MP4 (format 18 / 360p) which contains pre-muxed audio and video in a single file without needing FFmpeg post-processing.
+  4. **Cookie Injection Support:** `YtDlpService.get_cookie_file()` detects `YOUTUBE_COOKIES` environment variable (raw Netscape cookies text from browser extensions), writes to `/tmp/yt_cookies.txt`, or reads from `YOUTUBE_COOKIES_PATH` / root `cookies.txt` for authenticated or age-restricted extraction.
+
+### 2. Vercel 4.5 MB Payload Limit & Non-JSON Handling
+- **The Problem:** Vercel Serverless Functions enforce a strict 4.5 MB maximum payload limit for request bodies. When uploading files larger than 4.5 MB to `/api/convert`, Vercel's edge proxy immediately terminates the request and returns a plain text `413 Request Entity Too Large` error. Calling `await response.json()` without checking content-type throws `SyntaxError: Unexpected token 'R', "Request En"... is not valid JSON`.
+- **The Solution:**
+  1. In `static/js/converter.js` (and `analyzer.js`, `downloader.js`), the response status is checked for `413` specifically: displaying a helpful message (`"File exceeds the serverless upload limit (4.5 MB on Vercel). Please upload a smaller file."`).
+  2. Before invoking `.json()`, `response.headers.get("content-type")` is inspected. If not `application/json`, the error message is extracted as text (`await response.text()`), preventing JavaScript syntax exceptions.
+

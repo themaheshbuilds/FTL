@@ -166,10 +166,19 @@ class MediaService:
                     final_path = str(gen_dir / final_name)
                     ok = extract_audio(downloaded_file, final_path, target_format=audio_ext)
                     if not ok or not os.path.exists(final_path):
-                        return False, None, None, None, None, f"Failed to extract {audio_ext.upper()} audio."
+                        # Graceful fallback: if ffmpeg is missing and downloaded file is already audio
+                        curr_ext = os.path.splitext(downloaded_file)[1].lstrip('.').lower()
+                        if curr_ext in ("mp3", "m4a", "aac", "wav", "opus"):
+                            import shutil
+                            final_name = f"{safe_base}.{curr_ext}"
+                            final_path = str(gen_dir / final_name)
+                            shutil.move(downloaded_file, final_path)
+                            audio_ext = curr_ext
+                        else:
+                            return False, None, None, None, None, f"Failed to extract {audio_ext.upper()} audio."
 
                     fsize = os.path.getsize(final_path)
-                    mime = "audio/mp4" if audio_ext == "m4a" else "audio/mpeg"
+                    mime = "audio/mp4" if audio_ext in ("m4a", "aac") else "audio/mpeg"
                     JobService.update_job_success(job.job_id, final_path, final_name, mime, fsize)
                     return True, job.job_id, final_name, mime, fsize, None
 
@@ -180,11 +189,17 @@ class MediaService:
 
                 ok = remux_video(downloaded_file, final_path, target_format=video_container, caption=caption_text)
                 if not ok or not os.path.exists(final_path):
-                    # Direct move fallback if remux was not needed and extension matches
+                    # Direct move fallback if remux was not needed or ffmpeg is unavailable
                     curr_ext = os.path.splitext(downloaded_file)[1].lstrip('.').lower()
                     if curr_ext == video_container:
                         import shutil
                         shutil.move(downloaded_file, final_path)
+                    elif os.path.exists(downloaded_file):
+                        import shutil
+                        final_name = f"{safe_base}.{curr_ext}"
+                        final_path = str(gen_dir / final_name)
+                        shutil.move(downloaded_file, final_path)
+                        video_container = curr_ext
                     else:
                         return False, None, None, None, None, f"Failed to package video into {video_container.upper()}."
 

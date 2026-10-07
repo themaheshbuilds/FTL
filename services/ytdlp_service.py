@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 import yt_dlp
 from models.result import AnalysisResult
@@ -13,49 +14,101 @@ logger = get_logger("linkforge.ytdlp")
 class YtDlpService:
     """Encapsulates all interaction with yt-dlp."""
 
-    @staticmethod
-    def get_default_opts(extra_opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Standardized yt-dlp options ensuring safety, ffmpeg integration, and non-interactive execution."""
+    @classmethod
+    def get_cookie_file(cls) -> Optional[str]:
+        """Discover cookies file from path or environment variable."""
+        cookie_path = os.getenv("YOUTUBE_COOKIES_PATH") or os.getenv("COOKIES_FILE")
+        if cookie_path and os.path.isfile(cookie_path):
+            return cookie_path
+
+        local_cookie = Path(__file__).resolve().parent.parent / "cookies.txt"
+        if local_cookie.is_file():
+            return str(local_cookie)
+
+        raw_cookies = os.getenv("YOUTUBE_COOKIES")
+        if raw_cookies:
+            import tempfile
+            tmp_cookie = Path(tempfile.gettempdir()) / "yt_cookies.txt"
+            try:
+                tmp_cookie.write_text(raw_cookies.strip(), encoding="utf-8")
+                return str(tmp_cookie)
+            except Exception:
+                pass
+        return None
+
+    @classmethod
+    def get_default_opts(cls, extra_opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Standardized yt-dlp options ensuring safety, ffmpeg integration, and cloud-resilient execution."""
         opts = {
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
-            "socket_timeout": 20,
+            "socket_timeout": 25,
             "extract_flat": False,
             "noplaylist": False,
             "ignoreerrors": True,
             "nocheckcertificate": False,
             "windowsfilenames": True,
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios"],
+                    "player_skip": ["webpage", "configs"]
+                }
+            }
         }
 
-        # Automatically bind ffmpeg binary
+        cookie_file = cls.get_cookie_file()
+        if cookie_file:
+            opts["cookiefile"] = cookie_file
+
         ffmpeg_bin = get_ffmpeg_executable()
         if ffmpeg_bin:
             opts["ffmpeg_location"] = ffmpeg_bin
 
         if extra_opts:
-            opts.update(extra_opts)
+            # Deep merge extractor_args if present
+            if "extractor_args" in extra_opts and "extractor_args" in opts:
+                merged_extractor_args = dict(opts["extractor_args"])
+                merged_extractor_args.update(extra_opts["extractor_args"])
+                extra_copy = dict(extra_opts)
+                extra_copy["extractor_args"] = merged_extractor_args
+                opts.update(extra_copy)
+            else:
+                opts.update(extra_opts)
         return opts
 
     @classmethod
     def extract_info(cls, url: str) -> Optional[Dict[str, Any]]:
-        """Extract metadata without downloading files."""
-        opts = cls.get_default_opts({"skip_download": True})
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                return info
-        except yt_dlp.utils.DownloadError as e:
-            msg = str(e).lower()
-            if "private" in msg or "login" in msg or "sign in" in msg:
-                logger.warning(f"yt-dlp authentication required for {url}: {e}")
-            else:
-                logger.warning(f"yt-dlp extraction error for {url}: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error in yt-dlp extraction for {url}: {e}", exc_info=True)
-            return None
+        """Extract metadata without downloading files, using progressive fallback clients."""
+        client_configs = [
+            # 1. Primary: android + ios mobile InnerTube endpoints (bypasses bot detection & 429 webpage blocks)
+            {"player_client": ["android", "ios"], "player_skip": ["webpage", "configs"]},
+            # 2. Fallback: dedicated android client
+            {"player_client": ["android"], "player_skip": ["webpage", "configs"]},
+            # 3. Fallback: dedicated ios client
+            {"player_client": ["ios"], "player_skip": ["webpage", "configs"]},
+            # 4. Fallback: TV and web embedded endpoints
+            {"player_client": ["tv", "web_embedded"], "player_skip": ["webpage", "configs"]},
+            # 5. Generic yt-dlp fallback
+            {}
+        ]
+
+        for config in client_configs:
+            try:
+                extra = {"skip_download": True}
+                if config:
+                    extra["extractor_args"] = {"youtube": config}
+                opts = cls.get_default_opts(extra)
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if info:
+                        return info
+            except Exception as e:
+                logger.warning(f"yt-dlp extraction trial failed for {url} with client config {config}: {e}")
+
+        return None
+
 
     @classmethod
     def analyze_url(cls, url: str, platform_hint: str = "Platform") -> AnalysisResult:
@@ -157,9 +210,18 @@ class YtDlpService:
             content_type = "image"
             formats = ["original", "pdf", "docx", "zip"]
 
+        # Ensure valid direct media URL
         media_url = info.get("url")
-        if not media_url and info.get("formats"):
-            media_url = info["formats"][-1].get("url")
+        raw_formats = info.get("formats") or []
+        valid_formats = [f for f in raw_formats if f.get("url") and f.get("vcodec") != "none"]
+        if not valid_formats:
+            valid_formats = [f for f in raw_formats if f.get("url")]
+
+        if not media_url and valid_formats:
+            media_url = valid_formats[-1].get("url")
+            chosen_ext = valid_formats[-1].get("ext")
+            if chosen_ext and chosen_ext not in ("mhtml",):
+                ext = chosen_ext
 
         item = MediaItem(
             url=media_url or url,
@@ -192,8 +254,9 @@ class YtDlpService:
         filename_template: str = "%(title).80s.%(ext)s",
         format_filter: str = "best"
     ) -> Optional[str]:
-        """Download media via yt-dlp to isolated target directory with audio/video merge support."""
+        """Download media via yt-dlp to isolated target directory with audio/video merge and progressive stream support."""
         output_path = os.path.join(target_dir, filename_template)
+        ffmpeg_bin = get_ffmpeg_executable()
         
         custom_opts: Dict[str, Any] = {
             "skip_download": False,
@@ -202,32 +265,37 @@ class YtDlpService:
 
         if format_filter == "audio":
             custom_opts["format"] = "bestaudio/best"
-            custom_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }]
+            if ffmpeg_bin:
+                custom_opts["postprocessors"] = [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }]
         elif format_filter == "1080p":
-            custom_opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+            custom_opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best[ext=mp4]/18/best"
             custom_opts["merge_output_format"] = "mp4"
             custom_opts["final_ext"] = "mp4"
-            custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            if ffmpeg_bin:
+                custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
         elif format_filter == "720p":
-            custom_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+            custom_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4]/18/best"
             custom_opts["merge_output_format"] = "mp4"
             custom_opts["final_ext"] = "mp4"
-            custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            if ffmpeg_bin:
+                custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
         elif format_filter == "480p":
-            custom_opts["format"] = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best"
+            custom_opts["format"] = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best[ext=mp4]/18/best"
             custom_opts["merge_output_format"] = "mp4"
             custom_opts["final_ext"] = "mp4"
-            custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            if ffmpeg_bin:
+                custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
         else:
-            # Default best video + best audio merged into mp4
-            custom_opts["format"] = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b/best"
+            # Default best video + best audio merged into mp4, with fallback to progressive mp4 (18 or best[ext=mp4])
+            custom_opts["format"] = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/18/bv*+ba/b/best"
             custom_opts["merge_output_format"] = "mp4"
             custom_opts["final_ext"] = "mp4"
-            custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            if ffmpeg_bin:
+                custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
 
         opts = cls.get_default_opts(custom_opts)
 

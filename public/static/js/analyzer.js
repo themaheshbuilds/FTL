@@ -41,6 +41,13 @@ const Analyzer = {
             clearTimeout(t1);
             clearTimeout(t2);
 
+            const contentType = response.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                const text = await response.text();
+                this.showError(text || `Server returned error (${response.status})`, "SERVER_ERROR");
+                return;
+            }
+
             const data = await response.json();
 
             if (!response.ok || !data.success) {
