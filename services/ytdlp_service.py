@@ -148,32 +148,34 @@ class YtDlpService:
     def extract_info(cls, url: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """Extract metadata without downloading files, attempting full resolution first then mobile fallbacks."""
         client_configs = [
-            # 1. Primary: Unrestricted clients (enables 4K, 1440p, 1080p, 720p full adaptive streams)
-            None,
-            # 2. Cloud Fallback: android + ios mobile InnerTube endpoints (bypasses bot detection on datacenter IPs)
-            {"player_client": ["android", "ios"], "player_skip": ["webpage", "configs"]},
-            # 3. Fallback: dedicated android client
-            {"player_client": ["android"], "player_skip": ["webpage", "configs"]},
-            # 4. Fallback: dedicated ios client
-            {"player_client": ["ios"], "player_skip": ["webpage", "configs"]},
-            # 5. Fallback: TV and web embedded endpoints
-            {"player_client": ["tv", "web_embedded"], "player_skip": ["webpage", "configs"]},
+            # 1. Primary: Unrestricted clients with cookies (enables 4K, 1440p, 1080p, 720p full adaptive streams)
+            (None, True),
+            # 2. Web clients with cookies
+            ({"player_client": ["web", "mweb"]}, True),
+            # 3. Cloud Fallback: android mobile client WITHOUT cookies (mobile clients reject cookies, but bypass datacenter blocks)
+            ({"player_client": ["android"], "player_skip": ["webpage", "configs"]}, False),
+            # 4. Fallback: dedicated ios client WITHOUT cookies
+            ({"player_client": ["ios"], "player_skip": ["webpage", "configs"]}, False),
+            # 5. Fallback: TV embedded endpoints
+            ({"player_client": ["tv_embedded"], "player_skip": ["webpage", "configs"]}, False),
         ]
 
         last_error = ""
-        for config in client_configs:
+        for config, use_cookies in client_configs:
             try:
                 extra = {"skip_download": True, "ignoreerrors": False}
                 if config:
                     extra["extractor_args"] = {"youtube": config}
                 opts = cls.get_default_opts(extra)
+                if not use_cookies:
+                    opts.pop("cookiefile", None)
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
                     if info and info.get("title"):
                         return info, ""
             except Exception as e:
                 last_error = str(e)
-                logger.warning(f"yt-dlp extraction trial failed for {url} with client config {config}: {e}")
+                logger.warning(f"yt-dlp extraction trial failed for {url} with client config {config} (use_cookies={use_cookies}): {e}")
 
         return None, last_error
 
@@ -386,30 +388,49 @@ class YtDlpService:
 
         opts = cls.get_default_opts(custom_opts)
 
+        download_success = False
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-                if not info:
-                    return None
-
-            # Locate downloaded file in target_dir
-            candidates = []
-            for fname in os.listdir(target_dir):
-                # Ignore unfinished or part files
-                if fname.endswith((".part", ".ytdl", ".temp", ".aria2")):
-                    continue
-                fpath = os.path.join(target_dir, fname)
-                if os.path.isfile(fpath) and os.path.getsize(fpath) > 0:
-                    candidates.append((fpath, os.path.getsize(fpath), os.path.getmtime(fpath)))
-
-            if not candidates:
-                logger.warning(f"No completed file found in {target_dir} after yt-dlp download.")
-                return None
-
-            # Pick largest/newest completed candidate file
-            candidates.sort(key=lambda c: (c[1], c[2]), reverse=True)
-            return candidates[0][0]
-
+                if info:
+                    download_success = True
         except Exception as e:
-            logger.error(f"Failed to download media via yt-dlp from {url}: {e}", exc_info=True)
+            logger.warning(f"Primary download trial failed for {url}: {e}. Attempting mobile client fallback...")
+            # Fallback for cloud/bot challenges: mobile android client without cookies
+            fallback_opts = dict(opts)
+            fallback_opts.pop("cookiefile", None)
+            fallback_opts["format"] = "best[ext=mp4]/best/18"
+            fallback_opts["extractor_args"] = {
+                "youtube": {
+                    "player_client": ["android"],
+                    "player_skip": ["webpage", "configs"]
+                }
+            }
+            try:
+                with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    if info:
+                        download_success = True
+            except Exception as e2:
+                logger.error(f"Mobile fallback download also failed for {url}: {e2}")
+
+        if not download_success:
             return None
+
+        # Locate downloaded file in target_dir
+        candidates = []
+        for fname in os.listdir(target_dir):
+            # Ignore unfinished or part files
+            if fname.endswith((".part", ".ytdl", ".temp", ".aria2")):
+                continue
+            fpath = os.path.join(target_dir, fname)
+            if os.path.isfile(fpath) and os.path.getsize(fpath) > 0:
+                candidates.append((fpath, os.path.getsize(fpath), os.path.getmtime(fpath)))
+
+        if not candidates:
+            logger.warning(f"No completed file found in {target_dir} after yt-dlp download.")
+            return None
+
+        # Pick largest/newest completed candidate file
+        candidates.sort(key=lambda c: (c[1], c[2]), reverse=True)
+        return candidates[0][0]
