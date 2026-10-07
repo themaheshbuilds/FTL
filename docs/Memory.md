@@ -291,5 +291,5 @@ pytest -v
 - **Static Assets via CDN:** Static assets are mirrored into `public/static/` so Vercel Edge CDN serves CSS and JavaScript directly without cold starts.
 - **Rewrites:** `vercel.json` routes `"/(.*)"` to `"/api/index.py"`.
 - **Serverless Storage:** Lambda filesystems are read-only except `/tmp`. `config.py` detects serverless runtimes (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `LAMBDA_TASK_ROOT`, etc.) and automatically routes `TEMP_STORAGE_DIR` and `GENERATED_STORAGE_DIR` to `/tmp/linkforge/...` with resilient fallback handling.
-- **Dependencies:** `pytest` is excluded from production `requirements.txt` to keep the deployment package lightweight. `.vercelignore` excludes tests, scratch scripts, docs, and git files.
+- **Dependencies:** `beautifulsoup4` is required for LinkedIn & generic HTML metadata extraction; `pytest` is excluded from production `requirements.txt` to keep the deployment package lightweight. `.vercelignore` excludes tests, scratch scripts, docs, and git files.
 
