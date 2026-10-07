@@ -22,7 +22,7 @@ def health_check():
 @health_bp.route("/api/debug_yt", methods=["GET"])
 def debug_yt():
     url = request.args.get("url", "https://youtu.be/xvT1jH8B9AM")
-    client = request.args.get("client")  # None by default = use natural/unrestricted clients
+    client = request.args.get("client", "service")
     
     extra = {
         "skip_download": True,
@@ -70,10 +70,11 @@ def debug_yt():
         else:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-            res["success"] = True
-            res["info_keys"] = list(info.keys()) if info else []
-            res["title"] = info.get("title") if info else None
-            res["formats_count"] = len(info.get("formats", [])) if info else 0
+        
+        res["success"] = True
+        res["info_keys"] = list(info.keys()) if info else []
+        res["title"] = info.get("title") if info else None
+        res["formats_count"] = len(info.get("formats", [])) if info else 0
     except Exception as e:
         res["success"] = False
         res["error_type"] = type(e).__name__
