@@ -6,6 +6,7 @@
 const Converter = {
     activeTool: null,
     selectedFiles: [],
+    currentBlobUrl: null,
 
     tools: {
         pdf_to_images: {
@@ -13,8 +14,8 @@ const Converter = {
             title: "PDF to Images",
             category: "docs",
             icon: "📄",
-            badge: "PDF → JPG/PNG",
-            description: "Extract pages of a PDF into high-resolution JPG or PNG images (download single page or ZIP).",
+            badge: "PDF → JPG/PNG (Any Size)",
+            description: "Extract pages of any PDF into high-resolution JPG or PNG images directly in your browser (unlimited file size).",
             accept: ".pdf",
             multiple: false,
             outputFormats: [
@@ -111,6 +112,11 @@ const Converter = {
         this.bindModeTabs();
         this.renderToolCards();
         this.bindWorkspaceEvents();
+
+        // Initialize PDF.js worker if available
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        }
     },
 
     bindModeTabs() {
@@ -363,7 +369,33 @@ const Converter = {
         const nameInput = document.getElementById("converter-filename-input");
         const customFilename = nameInput ? nameInput.value.trim() : "";
 
-        // Build FormData
+        // High-Capacity Client-Side Processing for PDF to Images (Bypasses Vercel 4.5 MB payload limit)
+        if (this.activeTool.id === "pdf_to_images" && window.pdfjsLib && window.JSZip) {
+            try {
+                await this.convertPdfToImagesClientSide(this.selectedFiles[0], outputFormat, customFilename);
+                return;
+            } catch (clientErr) {
+                console.warn("Client-side PDF conversion error, checking fallback:", clientErr);
+                // If file is larger than 4.5 MB, serverless upload will be rejected with 413, so report client error clearly
+                if (this.selectedFiles[0].size > 4.5 * 1024 * 1024) {
+                    this.showError(`PDF conversion failed: ${clientErr.message || "Unable to parse PDF pages."}`);
+                    return;
+                }
+                // If under 4.5 MB, fall through to server conversion as fallback
+            }
+        }
+
+        // High-Capacity Client-Side Processing for Image Converter (JPG, PNG, WebP)
+        if (this.activeTool.id === "image_converter") {
+            try {
+                await this.convertImageClientSide(this.selectedFiles[0], outputFormat, customFilename);
+                return;
+            } catch (imgErr) {
+                console.warn("Client-side image conversion error, falling back to server:", imgErr);
+            }
+        }
+
+        // Standard Server-Side Conversion (Localhost or Supported Cloud Conversions)
         const formData = new FormData();
         formData.append("conversion_type", this.activeTool.id);
         formData.append("output_format", outputFormat);
@@ -376,6 +408,7 @@ const Converter = {
         // Show loading state
         this.hideWorkspaceSubsections();
         const loadingCard = document.getElementById("converter-loading-card");
+        this.setLoadingStatus("Processing Conversion...", "Converting with native high-performance engines.");
         loadingCard.style.display = "block";
 
         try {
@@ -385,7 +418,7 @@ const Converter = {
             });
 
             if (response.status === 413) {
-                this.showError("File exceeds the serverless upload limit (4.5 MB on Vercel). Please upload a smaller file.");
+                this.showError("File exceeds the serverless upload limit (4.5 MB on Vercel). Please upload a smaller file or run locally for files up to 500 MB.");
                 return;
             }
 
@@ -410,14 +443,186 @@ const Converter = {
         }
     },
 
+    async convertPdfToImagesClientSide(file, outputFormat, customFilename) {
+        this.hideWorkspaceSubsections();
+        const loadingCard = document.getElementById("converter-loading-card");
+        loadingCard.style.display = "block";
+        this.setLoadingStatus("Processing PDF In-Browser...", "Loading PDF document (zero server upload)...");
+
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        }
+
+        const outFormat = (outputFormat || "jpg").toLowerCase();
+        const isPng = outFormat === "png";
+        const mimeType = isPng ? "image/png" : "image/jpeg";
+        const ext = isPng ? "png" : "jpg";
+
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const numPages = pdf.numPages;
+
+        if (numPages === 0) {
+            throw new Error("The selected PDF document contains no pages.");
+        }
+
+        const rawName = customFilename || file.name.replace(/\.[^/.]+$/, "");
+        const safeBase = rawName.replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/^_+|_+$/g, "") || "converted_file";
+
+        if (numPages === 1) {
+            this.setLoadingStatus("Rendering Page 1 of 1...", "Exporting high-resolution image...");
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 2.0 });
+
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            const ctx = canvas.getContext("2d");
+
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+            const blob = await new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), mimeType, 0.92);
+            });
+
+            const blobUrl = URL.createObjectURL(blob);
+            const outFilename = `${safeBase}.${ext}`;
+            const sizeFormatted = blob.size < 1024 * 1024
+                ? `${(blob.size / 1024).toFixed(1)} KB`
+                : `${(blob.size / (1024 * 1024)).toFixed(2)} MB`;
+
+            this.showSuccess({
+                filename: outFilename,
+                size_formatted: sizeFormatted,
+                blobUrl: blobUrl,
+                isClientSide: true
+            });
+        } else {
+            const zip = new JSZip();
+            const padDigits = Math.max(2, String(numPages).length);
+
+            for (let i = 1; i <= numPages; i++) {
+                const percent = Math.round((i / numPages) * 100);
+                this.setLoadingStatus("Rendering PDF Pages...", `Rendering page ${i} of ${numPages} (${percent}%)...`);
+
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 2.0 });
+
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.floor(viewport.width);
+                canvas.height = Math.floor(viewport.height);
+                const ctx = canvas.getContext("2d");
+
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                const pageBlob = await new Promise((resolve, reject) => {
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), mimeType, 0.92);
+                });
+
+                const pageNumStr = String(i).padStart(padDigits, "0");
+                zip.file(`page_${pageNumStr}.${ext}`, pageBlob);
+            }
+
+            this.setLoadingStatus("Packaging Archive...", "Compressing all rendered pages into ZIP...");
+            const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" }, (metadata) => {
+                this.setLoadingStatus("Packaging Archive...", `Compressing ZIP: ${Math.round(metadata.percent)}%...`);
+            });
+
+            const blobUrl = URL.createObjectURL(zipBlob);
+            const outFilename = `${safeBase}_pages.zip`;
+            const sizeFormatted = zipBlob.size < 1024 * 1024
+                ? `${(zipBlob.size / 1024).toFixed(1)} KB`
+                : `${(zipBlob.size / (1024 * 1024)).toFixed(2)} MB`;
+
+            this.showSuccess({
+                filename: outFilename,
+                size_formatted: sizeFormatted,
+                blobUrl: blobUrl,
+                isClientSide: true
+            });
+        }
+    },
+
+    async convertImageClientSide(file, outputFormat, customFilename) {
+        this.hideWorkspaceSubsections();
+        const loadingCard = document.getElementById("converter-loading-card");
+        loadingCard.style.display = "block";
+        this.setLoadingStatus("Converting Image...", "Processing image locally in browser...");
+
+        const outFormat = (outputFormat || "png").toLowerCase();
+        let mimeType = "image/png";
+        if (outFormat === "jpg" || outFormat === "jpeg") mimeType = "image/jpeg";
+        else if (outFormat === "webp") mimeType = "image/webp";
+
+        const rawName = customFilename || file.name.replace(/\.[^/.]+$/, "");
+        const safeBase = rawName.replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/^_+|_+$/g, "") || "converted_image";
+
+        const imageBitmap = await createImageBitmap(file);
+        const canvas = document.createElement("canvas");
+        canvas.width = imageBitmap.width;
+        canvas.height = imageBitmap.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(imageBitmap, 0, 0);
+
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error("Image export failed")), mimeType, 0.95);
+        });
+
+        const blobUrl = URL.createObjectURL(blob);
+        const outFilename = `${safeBase}.${outFormat === "jpeg" ? "jpg" : outFormat}`;
+        const sizeFormatted = blob.size < 1024 * 1024
+            ? `${(blob.size / 1024).toFixed(1)} KB`
+            : `${(blob.size / (1024 * 1024)).toFixed(2)} MB`;
+
+        this.showSuccess({
+            filename: outFilename,
+            size_formatted: sizeFormatted,
+            blobUrl: blobUrl,
+            isClientSide: true
+        });
+    },
+
+    setLoadingStatus(title, subtitle) {
+        const loadingCard = document.getElementById("converter-loading-card");
+        if (loadingCard) {
+            const titleEl = loadingCard.querySelector(".status-title");
+            const subEl = loadingCard.querySelector(".status-subtitle");
+            if (titleEl && title) titleEl.textContent = title;
+            if (subEl && subtitle) subEl.textContent = subtitle;
+        }
+    },
+
     showSuccess(data) {
         this.hideWorkspaceSubsections();
+
+        // Revoke previous blob URL to prevent memory leaks
+        if (this.currentBlobUrl) {
+            URL.revokeObjectURL(this.currentBlobUrl);
+            this.currentBlobUrl = null;
+        }
+
         const successCard = document.getElementById("converter-success-card");
         document.getElementById("converter-success-filename").textContent = data.filename || "converted_file";
         document.getElementById("converter-success-filesize").textContent = data.size_formatted || "Ready";
 
         const directBtn = document.getElementById("converter-direct-download-btn");
-        directBtn.href = `/download/${encodeURIComponent(data.file_id)}`;
+        const expiryNotice = successCard.querySelector(".expiry-notice");
+
+        if (data.blobUrl) {
+            this.currentBlobUrl = data.blobUrl;
+            directBtn.href = data.blobUrl;
+            directBtn.setAttribute("download", data.filename || "converted_file");
+            if (expiryNotice) {
+                expiryNotice.textContent = "⚡ Rendered instantly on your device — Zero server upload, zero file size limits.";
+            }
+        } else {
+            directBtn.href = `/download/${encodeURIComponent(data.file_id)}`;
+            directBtn.removeAttribute("download");
+            if (expiryNotice) {
+                expiryNotice.textContent = "⏳ Stored securely in isolated temporary workspace for 30 minutes.";
+            }
+        }
 
         successCard.style.display = "block";
     },
@@ -437,9 +642,14 @@ const Converter = {
     },
 
     resetWorkspace() {
+        if (this.currentBlobUrl) {
+            URL.revokeObjectURL(this.currentBlobUrl);
+            this.currentBlobUrl = null;
+        }
         this.selectedFiles = [];
         this.renderSelectedFiles();
         this.hideWorkspaceSubsections();
+        this.setLoadingStatus("Processing Conversion...", "Converting with native high-performance engines.");
         document.getElementById("converter-upload-form").style.display = "block";
     }
 };

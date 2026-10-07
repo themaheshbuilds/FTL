@@ -314,7 +314,11 @@ pytest -v
 ### 2. Max Resolution Downloading
 - Standard `yt-dlp` options now use unrestricted clients and `bestvideo+bestaudio/best` (merged into MP4 via FFmpeg), delivering true maximum resolution (1080p/2K/4K, ~218 MB+) instead of mobile 360p (11 MB).
 
-### 3. Vercel 4.5 MB Payload Limit & Non-JSON Handling
-- Vercel Serverless Functions enforce a strict 4.5 MB maximum payload limit for request bodies. Large file conversions return `413 Request Entity Too Large`.
-- Frontend checks `response.status === 413` and inspects `content-type` before invoking `.json()`, preventing syntax crashes.
+### 3. Vercel 4.5 MB Payload Limit & Client-Side In-Browser Conversion Bypass
+- Vercel Serverless Functions enforce a strict 4.5 MB maximum payload limit for incoming HTTP request bodies (`POST /api/convert`), returning `413 Request Entity Too Large` for larger files.
+- To eliminate this restriction completely on Vercel without requiring external storage buckets:
+  - **PDF to Images**: Rendered directly in-browser using Mozilla's `pdf.js` and `jszip` at 2.0x scale (150 DPI). If 1 page, downloads a single JPG/PNG blob; if multiple pages, compiles into a ZIP archive.
+  - **Image Converter**: Processed client-side via HTML5 Canvas into JPG/PNG/WebP blobs.
+  - Zero bytes are transmitted to the serverless function, allowing 20 MB, 50 MB, or 100 MB+ documents to convert without hitting Vercel's 4.5 MB ceiling.
+- Server-side endpoint (`/api/convert`) remains intact with 500 MB capacity for localhost (`python app.py`) and API clients.
 
