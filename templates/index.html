@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkForge — One Link. Any File.</title>
+    <meta name="description" content="Download and package publicly accessible media and files from supported platforms and URLs.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-inner">
+                <a href="/" class="brand-logo" id="brand-link">
+                    <span class="logo-icon">⚡</span>
+                    <span class="brand-name">LINKFORGE</span>
+                </a>
+                <div class="mode-tabs" role="tablist">
+                    <button type="button" class="mode-tab-btn active" id="tab-downloader" role="tab" aria-selected="true">
+                        <span class="tab-icon">🔗</span>
+                        <span>Link Downloader</span>
+                    </button>
+                    <button type="button" class="mode-tab-btn" id="tab-converter" role="tab" aria-selected="false">
+                        <span class="tab-icon">🔄</span>
+                        <span>File Converter</span>
+                    </button>
+                </div>
+
+                <nav class="header-nav">
+                    <button type="button" class="nav-link-btn" id="open-about-modal">About</button>
+                    <button type="button" class="nav-link-btn" id="open-platforms-modal">Supported Platforms</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content" id="main-content">
+            <!-- ==================== DOWNLOADER VIEW ==================== -->
+            <div id="downloader-view">
+                <!-- Hero / Input View -->
+                <section class="hero-section" id="hero-section">
+                    <div class="hero-badge">One Link. Any File.</div>
+                    <h1 class="hero-title">Extract & package files from any link</h1>
+                    <p class="hero-subtitle">
+                        Transform public social posts, video streams, image galleries, and web links into clean original files, ZIP archives, or PDFs.
+                    </p>
+
+                    <!-- Input Card -->
+                    <div class="input-card" id="input-card">
+                        <form id="url-form" class="url-form" autocomplete="off">
+                            <div class="input-group">
+                                <span class="input-icon">🔗</span>
+                                <input 
+                                    type="url" 
+                                    id="url-input" 
+                                    class="url-input" 
+                                    placeholder="Paste link here (Instagram, YouTube, Reddit, X, TikTok, Direct URL...)" 
+                                    required
+                                    aria-label="URL to analyze"
+                                >
+                                <button type="button" class="paste-btn" id="paste-btn" title="Paste from clipboard">
+                                    Paste
+                                </button>
+                                <button type="button" class="clear-btn" id="clear-btn" title="Clear input" style="display: none;">
+                                    ✕
+                                </button>
+                            </div>
+                            <button type="submit" class="primary-btn submit-btn" id="analyze-btn">
+                                <span class="btn-text">Analyze Link</span>
+                                <span class="btn-arrow">→</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Platform Quick Badges -->
+                    <div class="platform-chips">
+                        <span class="chip">YouTube</span>
+                        <span class="chip">Instagram</span>
+                        <span class="chip">TikTok</span>
+                        <span class="chip">Reddit</span>
+                        <span class="chip">X / Twitter</span>
+                        <span class="chip">Facebook</span>
+                        <span class="chip">LinkedIn</span>
+                        <span class="chip">Direct Files</span>
+                    </div>
+                </section>
+
+                <!-- Loading State View -->
+                <section class="status-card loading-card" id="loading-card" style="display: none;" aria-live="polite">
+                    <div class="loader-spinner"></div>
+                    <h2 class="status-title">Analyzing link...</h2>
+                    <div class="loading-steps">
+                        <div class="step-item active" id="step-platform">
+                            <span class="step-dot"></span> Checking platform
+                        </div>
+                        <div class="step-item" id="step-content">
+                            <span class="step-dot"></span> Detecting content type
+                        </div>
+                        <div class="step-item" id="step-media">
+                            <span class="step-dot"></span> Finding available media
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Result State View -->
+                <section class="status-card result-card" id="result-card" style="display: none;">
+                    <div class="result-header">
+                        <div class="result-badge-row">
+                            <span class="platform-badge" id="res-platform">Platform</span>
+                            <span class="content-type-badge" id="res-type">Type</span>
+                        </div>
+                        <h2 class="result-title" id="res-title">Content Detected</h2>
+                        <p class="result-summary" id="res-summary">Ready to package.</p>
+                    </div>
+
+                    <!-- Media Preview Section -->
+                    <div class="preview-container" id="preview-container">
+                        <!-- Populated dynamically: thumbnail, image grid, or video container -->
+                    </div>
+
+                    <!-- Format Selection Section -->
+                    <div class="format-options-card">
+                        <h3 class="format-section-title">Configure Output & Download</h3>
+
+                        <!-- Custom Filename Field -->
+                        <div class="config-row">
+                            <div class="option-field filename-field">
+                                <label for="custom-filename-input">File Name:</label>
+                                <div class="filename-input-container">
+                                    <input type="text" id="custom-filename-input" class="custom-input filename-input" placeholder="Enter file name (optional)">
+                                    <button type="button" class="btn-clear-filename" id="btn-clear-filename" title="Clear name" style="display: none;">✕</button>
+                                </div>
+                            </div>
+                            <span class="field-hint">Leave blank to use post title. Extension is added automatically.</span>
+                        </div>
+
+                        <!-- Caption Selection (With Caption / Without Caption) -->
+                        <div class="config-row" id="caption-config-row">
+                            <div class="caption-header-row">
+                                <label class="config-label">Post Caption / Description:</label>
+                                <span class="caption-detected-pill" id="caption-detected-pill" style="display: none;">Caption Available</span>
+                            </div>
+                            <div class="caption-toggle-group">
+                                <button type="button" class="caption-choice-btn active" id="btn-caption-without" data-with-caption="false">
+                                    <span class="choice-icon">✕</span> Without Caption
+                                </button>
+                                <button type="button" class="caption-choice-btn" id="btn-caption-with" data-with-caption="true">
+                                    <span class="choice-icon">✓</span> With Caption
+                                </button>
+                            </div>
+                            <div class="caption-preview-snippet" id="caption-preview-snippet" style="display: none;"></div>
+                        </div>
+
+                        <!-- Video Quality / Options (Only shown when video formats exist) -->
+                        <div class="video-options-group" id="video-options-group" style="display: none;">
+                            <div class="option-field">
+                                <label for="quality-select">Quality:</label>
+                                <select id="quality-select" class="custom-select">
+                                    <option value="best">Best Available</option>
+                                    <option value="1080p">1080p (Full HD)</option>
+                                    <option value="720p">720p (HD)</option>
+                                    <option value="480p">480p (SD)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Available Format Buttons -->
+                        <div class="format-heading-row">
+                            <label class="config-label">Select File Type to Download:</label>
+                        </div>
+                        <div class="format-actions" id="format-actions">
+                            <!-- Populated dynamically: [MP4], [MKV], [WebM], [PDF], [DOCX], [ZIP], [MP3], etc. -->
+                        </div>
+                    </div>
+
+                    <div class="result-footer">
+                        <button type="button" class="secondary-btn" id="btn-reset-result">
+                            ← Analyze Another Link
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Success State View (Generated File Ready) -->
+                <section class="status-card success-card" id="success-card" style="display: none;">
+                    <div class="success-icon-badge">✓</div>
+                    <h2 class="status-title">Ready for Download</h2>
+                    <div class="file-details-box">
+                        <div class="file-name" id="success-filename">instagram_post.pdf</div>
+                        <div class="file-meta" id="success-filesize">Approx. 4.8 MB</div>
+                    </div>
+                    <div class="success-actions">
+                        <a href="#" class="primary-btn download-action-btn" id="direct-download-btn">
+                            Download File
+                        </a>
+                        <button type="button" class="secondary-btn" id="btn-reset-success">
+                            Convert Another
+                        </button>
+                    </div>
+                    <p class="expiry-notice">
+                        ⏳ This temporary file will expire automatically in 30 minutes.
+                    </p>
+                </section>
+
+                <!-- Error State View -->
+                <section class="status-card error-card" id="error-card" style="display: none;" role="alert">
+                    <div class="error-icon-badge">⚠️</div>
+                    <h2 class="status-title" id="error-title">Unable to access this content</h2>
+                    <p class="error-description" id="error-message">
+                        The requested content could not be accessed.
+                    </p>
+                    <div class="error-reasons">
+                        <p class="reasons-heading">The content may be:</p>
+                        <ul class="reasons-list">
+                            <li>Private or restricted account</li>
+                            <li>Protected by authentication or paywalls</li>
+                            <li>Temporarily unavailable or removed</li>
+                            <li>An unsupported link or format</li>
+                        </ul>
+                    </div>
+                    <button type="button" class="primary-btn" id="btn-try-again">
+                        Try Another Link
+                    </button>
+                </section>
+            </div>
+
+            <!-- ==================== CONVERTER VIEW ==================== -->
+            <div id="converter-view" style="display: none;">
+                <!-- Converter Hero -->
+                <section class="hero-section" id="converter-hero">
+                    <div class="hero-badge">Local High-Speed Engine</div>
+                    <h1 class="hero-title">Universal File Converter</h1>
+                    <p class="hero-subtitle">
+                        Transform files directly on your machine. PDF to images, images to PDF, video to audio, DOCX to PDF, and more — with zero upload delays and full privacy.
+                    </p>
+
+                    <!-- Tool Category Filters -->
+                    <div class="tool-filters-row">
+                        <button type="button" class="tool-filter-btn active" data-category="all">
+                            <span>⚡</span> All Tools
+                        </button>
+                        <button type="button" class="tool-filter-btn" data-category="docs">
+                            <span>📄</span> Documents (PDF & Word)
+                        </button>
+                        <button type="button" class="tool-filter-btn" data-category="media">
+                            <span>🎬</span> Video & Audio
+                        </button>
+                        <button type="button" class="tool-filter-btn" data-category="images">
+                            <span>🖼️</span> Images
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Tools Catalog Grid -->
+                <div class="tool-cards-grid" id="converter-tools-grid">
+                    <!-- Populated dynamically by converter.js -->
+                </div>
+
+                <!-- Interactive Converter Workspace -->
+                <section class="status-card converter-workspace-card" id="converter-workspace" style="display: none;">
+                    <div class="workspace-header">
+                        <button type="button" class="secondary-btn btn-back-tools" id="btn-back-to-tools">
+                            ← Back to Tools
+                        </button>
+                        <div class="active-tool-banner">
+                            <span class="active-tool-icon" id="active-tool-icon">📄</span>
+                            <div class="active-tool-meta">
+                                <h3 id="active-tool-title">PDF to Images</h3>
+                                <p id="active-tool-desc">Extract pages into high-resolution JPG or PNG images.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upload & Configuration Form -->
+                    <div id="converter-upload-form">
+                        <!-- Drag & Drop Zone -->
+                        <div class="converter-dropzone" id="converter-dropzone">
+                            <input type="file" id="converter-file-input" style="display: none;">
+                            <div class="dropzone-icon">📁</div>
+                            <p class="dropzone-text">
+                                <strong>Drag & drop your file(s) here</strong>, or 
+                                <button type="button" class="browse-link-btn" id="converter-browse-btn">browse files</button>
+                            </p>
+                            <span class="dropzone-hint">Local processing • Fast, secure & private</span>
+                        </div>
+
+                        <!-- Staged Files List -->
+                        <div class="converter-selected-files" id="converter-selected-files" style="display: none;">
+                            <!-- Populated with .selected-file-chip -->
+                        </div>
+
+                        <!-- Settings & Output Config -->
+                        <div class="converter-config-grid">
+                            <div class="converter-config-col">
+                                <label for="converter-format-select" class="config-label">Convert To / Output Format:</label>
+                                <select id="converter-format-select" class="custom-select">
+                                    <!-- Populated dynamically based on tool -->
+                                </select>
+                            </div>
+                            <div class="converter-config-col">
+                                <label for="converter-filename-input" class="config-label">Custom Output Filename (Optional):</label>
+                                <div class="filename-input-container">
+                                    <input type="text" id="converter-filename-input" class="custom-input filename-input" placeholder="e.g. my_converted_file">
+                                </div>
+                                <span class="field-hint">Extension is appended automatically.</span>
+                            </div>
+                        </div>
+
+                        <!-- Convert Submit Action -->
+                        <div class="converter-actions-row">
+                            <button type="button" class="primary-btn convert-submit-btn" id="btn-do-convert" disabled>
+                                <span class="btn-text">Convert File Now</span>
+                                <span class="btn-arrow">⚡</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Converter Loading State -->
+                    <div class="converter-status-box loading-state" id="converter-loading-card" style="display: none;">
+                        <div class="loader-spinner"></div>
+                        <h3 class="status-title">Processing Conversion...</h3>
+                        <p class="status-subtitle">Converting locally with native high-performance engines.</p>
+                    </div>
+
+                    <!-- Converter Success State -->
+                    <div class="converter-status-box success-state" id="converter-success-card" style="display: none;">
+                        <div class="success-icon-badge">✓</div>
+                        <h3 class="status-title">Conversion Complete!</h3>
+                        <div class="file-details-box">
+                            <div class="file-name" id="converter-success-filename">converted_document.pdf</div>
+                            <div class="file-meta" id="converter-success-filesize">Approx 1.2 MB</div>
+                        </div>
+                        <div class="success-actions">
+                            <a href="#" class="primary-btn download-action-btn" id="converter-direct-download-btn">
+                                Download Converted File
+                            </a>
+                            <button type="button" class="secondary-btn" id="btn-reset-converter-success">
+                                Convert Another File
+                            </button>
+                        </div>
+                        <p class="expiry-notice">
+                            ⏳ Stored securely in isolated temporary workspace for 30 minutes.
+                        </p>
+                    </div>
+
+                    <!-- Converter Error State -->
+                    <div class="converter-status-box error-state" id="converter-error-card" style="display: none;">
+                        <div class="error-icon-badge">⚠️</div>
+                        <h3 class="status-title">Conversion Error</h3>
+                        <p class="error-description" id="converter-error-message">
+                            An error occurred during file conversion.
+                        </p>
+                        <button type="button" class="primary-btn" id="btn-reset-converter-error">
+                            Try Again
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-inner">
+                <p class="copyright">LinkForge &copy; 2026 — Public Media Packaging & Universal Conversion Suite</p>
+                <p class="disclaimer">Processes public content and client files locally. Compliant with access controls and security protocols.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- About Modal -->
+    <div class="modal-backdrop" id="about-modal" style="display: none;">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3>About LinkForge</h3>
+                <button type="button" class="modal-close-btn" id="close-about-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>LinkForge</strong> is a high-performance modular media extraction and universal file conversion engine.</p>
+                <p>It supports downloading media from social networks, compiling image carousels into multi-page PDFs or ZIPs, and converting local files including PDF to images, images to PDF, video to audio, DOCX to PDF, and cross-format audio/video transformations.</p>
+                <h4>Compliance & Privacy</h4>
+                <p>LinkForge never bypasses paywalls or DRM. Local conversions are executed natively with isolated temporary storage automatically cleared on expiration.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supported Platforms Modal -->
+    <div class="modal-backdrop" id="platforms-modal" style="display: none;">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3>Supported Platforms & Conversions</h3>
+                <button type="button" class="modal-close-btn" id="close-platforms-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <ul class="platforms-list">
+                    <li><strong>Link Downloader:</strong> YouTube, Instagram, Facebook, TikTok, X (Twitter), Reddit, LinkedIn, Pinterest, SoundCloud, Direct URLs</li>
+                    <li><strong>Document Conversions:</strong> PDF to JPG/PNG, Images to PDF, DOCX to PDF, PDF to DOCX</li>
+                    <li><strong>Media Conversions:</strong> Video to MP3/M4A, MP4 ↔ MKV ↔ WebM</li>
+                    <li><strong>Image Conversions:</strong> JPG ↔ PNG ↔ WebP</li>
+                </ul>
+                <p class="note">All file conversions execute locally with zero file size upload restrictions.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/downloader.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/analyzer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/converter.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
