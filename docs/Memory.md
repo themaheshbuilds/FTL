@@ -370,23 +370,26 @@ pytest -v
 
 # 12. Vercel Serverless Routing & Navigation Gotchas
 
-### 1. Canonical Vercel Rewrite Destination (`/api/index`)
+### 1. Canonical Vercel Rewrite Destination (`/api/index?__vercel_path__=/$1`)
 - **The Problem:** 
-  1. Specifying `"destination": "/api/index.py?__path__=/$1"` or `/app.py` in `vercel.json` breaks Vercel's serverless function invocation. Vercel function names exclude extensions (targeting `api/index.py` requires `"destination": "/api/index"`), and query parameter pollution leads to routing mismatches or raw 404s.
-  2. Adding `@web_bp.route("/api/index")` directly to the `index()` home page function causes every rewritten route (`/downloader`, `/converter`, etc.) to hit the homepage handler and render the home screen instead of the target page.
+  1. If `vercel.json` rewrites directly to `/api/index` without dynamic path capture, Vercel edge sets WSGI `PATH_INFO = "/api/index"`. Because Flask has no route defined for `/api/index`, Flask triggers `404 NOT FOUND` ("The requested resource was not found") for every single request.
+  2. If a route alias `@web_bp.route("/api/index")` was added to `index()`, every page (`/downloader`, `/converter`, etc.) hit the home view and was trapped on the home page.
+  3. Specifying `/api/index.py` with `.py` failed because Vercel functions are identified without extensions.
 - **The Solution:**
-  - `vercel.json` rewrite rule is canonical:
+  - `vercel.json` forwards the captured regex group `$1` into a dedicated query parameter:
     ```json
     {
       "rewrites": [
         {
           "source": "/(.*)",
-          "destination": "/api/index"
+          "destination": "/api/index?__vercel_path__=/$1"
         }
       ]
     }
     ```
-  - In `api/index.py`, the `VercelPathFix` WSGI middleware inspects `environ.get("HTTP_X_MATCHED_PATH") or environ.get("HTTP_X_FORWARDED_URI")` and restores `environ["PATH_INFO"]` to the original client URL (e.g., `/downloader`, `/converter/pdf-to-images`, `/api/analyze`), allowing Flask blueprints to match routes transparently without any `@web_bp.route("/api/index")` collision.
+  - In `api/index.py`, `VercelPathMiddleware` extracts `__vercel_path__`, normalizes slashes, and assigns it to `environ["PATH_INFO"]`, while cleanly stripping `__vercel_path__` from `environ["QUERY_STRING"]` so `request.args` remains clean.
+  - If invoked directly with `/api/index` or without `__vercel_path__`, it automatically defaults `PATH_INFO = "/"`, preventing any 404 dead-ends.
+  - All routes (`/`, `/downloader`, `/converter`, `/converter/<tool_slug>`, `/api/analyze`, `/api/generate`, `/download/<file_id>`) route with 100% fidelity. Verified via `tests/test_vercel_middleware.py`.
 
 ### 2. Dual 404 Errorhandler (HTML vs. JSON)
 - **The Problem:** When users navigated to a mistyped or missing page on Vercel, returning raw JSON `{"error": {"code": "NOT_FOUND", ...}}` dumped an unstyled raw JSON string on a blank browser screen, leading users to believe the site was broken.
