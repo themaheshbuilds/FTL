@@ -48,6 +48,16 @@ def create_app(config_object=None) -> Flask:
     app.register_blueprint(converter_bp)
     app.register_blueprint(email_bp)
 
+    # Response caching policy: prevent browser from caching dynamic HTML
+    @app.after_request
+    def set_cache_headers(response):
+        content_type = response.headers.get("Content-Type", "")
+        if "text/html" in content_type:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
     # Application-wide error handlers
     @app.errorhandler(404)
     def handle_not_found(e):

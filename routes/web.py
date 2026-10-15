@@ -151,5 +151,18 @@ def favicon():
 
 @web_bp.route("/sw.js", methods=["GET"])
 def service_worker():
-    return ("", 204)
+    script = (
+        "self.addEventListener('install', () => self.skipWaiting());\n"
+        "self.addEventListener('activate', (e) => {\n"
+        "  self.registration.unregister().then(() => {\n"
+        "    return self.clients.matchAll();\n"
+        "  }).then(clients => {\n"
+        "    clients.forEach(c => c.navigate(c.url));\n"
+        "  });\n"
+        "});\n"
+    )
+    from flask import Response
+    res = Response(script, mimetype="application/javascript")
+    res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return res
 

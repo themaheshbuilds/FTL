@@ -8,6 +8,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261015">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (var i = 0; i < regs.length; i++) regs[i].unregister();
+      });
+      if (window.caches) {
+        caches.keys().then(function(names) {
+          for (var i = 0; i < names.length; i++) caches.delete(names[i]);
+        });
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="app-wrapper">
