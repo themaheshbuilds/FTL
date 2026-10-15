@@ -1,3 +1,4 @@
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 from extractors.instagram import InstagramExtractor
@@ -139,3 +140,95 @@ def test_instagram_video_progressive_selection():
         assert res.items[0].url == "https://cdn.example.com/progressive_video.mp4"
         assert res.items[0].media_type == "video"
         assert res.items[1].media_type == "audio"
+
+
+def test_instagram_embed_contextjson_fallback():
+    extractor = InstagramExtractor()
+    sample_gql = {
+        "shortcode": "embed123",
+        "title": "Embed Post",
+        "edge_sidecar_to_children": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "child1",
+                        "display_url": "https://cdn.example.com/child1.jpg",
+                        "is_video": False
+                    }
+                },
+                {
+                    "node": {
+                        "id": "child2",
+                        "display_url": "https://cdn.example.com/child2.jpg",
+                        "is_video": False
+                    }
+                }
+            ]
+        }
+    }
+    mock_context_json = json.dumps({"gql_data": {"shortcode_media": sample_gql}})
+    mock_html = f'<html><body><script>var x = {{"contextJSON": {json.dumps(mock_context_json)}}};</script></body></html>'
+
+    with patch.object(extractor, "_extract_via_instagram_ie", return_value=None):
+        with patch("extractors.instagram.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.text = mock_html
+            mock_get.return_value = mock_resp
+
+            res = extractor.analyze("https://www.instagram.com/p/embed123/")
+            assert res.success is True
+            assert res.content_type == "image_collection"
+            assert res.media_count == 2
+            assert res.items[0].url == "https://cdn.example.com/child1.jpg"
+            assert res.items[1].url == "https://cdn.example.com/child2.jpg"
+
+
+def test_instagram_mobile_api_carousel_fallback():
+    extractor = InstagramExtractor()
+    mock_api_item = {
+        "pk": "321321",
+        "carousel_media": [
+            {
+                "pk": "sub1",
+                "image_versions2": {
+                    "candidates": [
+                        {"url": "https://cdn.example.com/api_thumb1.jpg"},
+                        {"url": "https://cdn.example.com/api_full1.jpg"}
+                    ]
+                }
+            },
+            {
+                "pk": "sub2",
+                "video_versions": [
+                    {"url": "https://cdn.example.com/api_video.mp4", "width": 720, "height": 1280}
+                ]
+            }
+        ]
+    }
+
+    with patch.object(extractor, "_extract_via_instagram_ie", return_value=None):
+        with patch.object(extractor, "_extract_via_embed_or_api") as mock_fallback:
+            info_dict = dict(mock_api_item)
+            info_dict["id"] = "api123"
+            info_dict["title"] = "API Post"
+            mock_fallback.return_value = extractor._convert_info_to_analysis_result(info_dict)
+
+            res = extractor.analyze("https://www.instagram.com/p/api123/")
+            assert res.success is True
+            assert res.content_type == "mixed"
+            assert res.media_count >= 2
+            assert any(it.media_type == "image" for it in res.items)
+            assert any(it.media_type == "video" for it in res.items)
+
+
+def test_ytdlp_instagram_cookies_env(monkeypatch, tmp_path):
+    from services.ytdlp_service import YtDlpService
+    monkeypatch.setenv("INSTAGRAM_COOKIES", ".instagram.com\tTRUE\t/\tTRUE\t1999999999\tsessionid\t12345test")
+    cookie_file = YtDlpService.get_cookie_file()
+    assert cookie_file is not None
+    assert "linkforge_env_cookies.txt" in cookie_file
+    with open(cookie_file, "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "sessionid" in content
+

@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, List, Tuple
 import yt_dlp
 from models.result import AnalysisResult
 from models.media import MediaItem
+from config import Config
 from utils.logging import get_logger, log_event
 from utils.filenames import sanitize_filename
 from utils.ffmpeg_helper import get_ffmpeg_executable
@@ -121,36 +122,42 @@ class YtDlpService:
     @classmethod
     def get_cookie_file(cls) -> Optional[str]:
         """Discover cookies file from path or environment variable, auto-converting JSON if needed."""
+        import tempfile
+
         # 1. Explicit path in env
-        cookie_path = os.getenv("YOUTUBE_COOKIES_PATH") or os.getenv("COOKIES_FILE")
+        cookie_path = os.getenv("YOUTUBE_COOKIES_PATH") or os.getenv("COOKIES_FILE") or os.getenv("INSTAGRAM_COOKIES_PATH")
         if cookie_path and os.path.isfile(cookie_path):
             return cookie_path
 
-        # 2. Local JSON file in project root
-        local_json = Path(__file__).resolve().parent.parent / "www_youtube_com_cookies.json"
-        if local_json.is_file():
-            try:
-                converted = format_cookies_to_netscape(local_json.read_text(encoding="utf-8"))
-                out_txt = Path(__file__).resolve().parent.parent / "cookies.txt"
-                out_txt.write_text(converted, encoding="utf-8")
-                return str(out_txt)
-            except Exception:
-                pass
-
-        # 3. Local Netscape cookies.txt
-        local_cookie = Path(__file__).resolve().parent.parent / "cookies.txt"
-        if local_cookie.is_file():
-            return str(local_cookie)
-
-        # 4. Raw cookies from environment variable
-        raw_cookies = os.getenv("YOUTUBE_COOKIES")
+        # 2. Raw cookies from environment variable (INSTAGRAM_COOKIES, COOKIES_TEXT, YOUTUBE_COOKIES, COOKIES)
+        raw_cookies = (
+            os.getenv("INSTAGRAM_COOKIES")
+            or os.getenv("COOKIES_TEXT")
+            or os.getenv("YOUTUBE_COOKIES")
+            or os.getenv("COOKIES")
+        )
         if raw_cookies:
-            import tempfile
-            tmp_cookie = Path(tempfile.gettempdir()) / "yt_cookies.txt"
+            tmp_cookie = Path(tempfile.gettempdir()) / "linkforge_env_cookies.txt"
             try:
                 converted = format_cookies_to_netscape(raw_cookies)
                 tmp_cookie.write_text(converted.strip(), encoding="utf-8")
                 return str(tmp_cookie)
+            except Exception:
+                pass
+
+        # 3. Local Netscape cookies.txt in project root
+        local_cookie = Path(__file__).resolve().parent.parent / "cookies.txt"
+        if local_cookie.is_file():
+            return str(local_cookie)
+
+        # 4. Local JSON file in project root (write converted Netscape cookies to /tmp)
+        local_json = Path(__file__).resolve().parent.parent / "www_youtube_com_cookies.json"
+        if local_json.is_file():
+            try:
+                converted = format_cookies_to_netscape(local_json.read_text(encoding="utf-8"))
+                out_txt = Path(tempfile.gettempdir()) / "linkforge_cookies.txt"
+                out_txt.write_text(converted, encoding="utf-8")
+                return str(out_txt)
             except Exception:
                 pass
         return None
@@ -158,11 +165,14 @@ class YtDlpService:
     @classmethod
     def get_default_opts(cls, extra_opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Standardized yt-dlp options ensuring safety, ffmpeg integration, and full resolution support."""
+        is_serverless = Config.IS_SERVERLESS or bool(os.getenv("VERCEL"))
+        default_timeout = 8 if is_serverless else 20
+
         opts = {
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
-            "socket_timeout": 25,
+            "socket_timeout": default_timeout,
             "extract_flat": False,
             "noplaylist": False,
             "ignoreerrors": True,

@@ -291,6 +291,11 @@ pytest -v
 - **Static Assets via CDN:** Static assets are mirrored into `public/static/` so Vercel Edge CDN serves CSS and JavaScript directly without cold starts.
 - **Serverless Storage:** Lambda filesystems are read-only except `/tmp`. `config.py` detects serverless runtimes (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `LAMBDA_TASK_ROOT`, etc.) and automatically routes `TEMP_STORAGE_DIR` and `GENERATED_STORAGE_DIR` to `/tmp/linkforge/...` with resilient fallback handling.
 - **Dependencies:** `beautifulsoup4` is required for LinkedIn & generic HTML metadata extraction; `pytest` is excluded from production `requirements.txt` to keep the deployment package lightweight. `.vercelignore` excludes tests, scratch scripts, docs, and git files.
+- **Instagram Cloud Extraction & Cookies:** Cloud datacenter IPs (Vercel/AWS Lambda) face Instagram login challenges. To guarantee 100% extraction:
+  1. `INSTAGRAM_COOKIES` or `COOKIES_TEXT` environment variables are parsed and written to `/tmp/linkforge_env_cookies.txt`.
+  2. Embed endpoint fallback (`/p/{shortcode}/embed/`) extracts `contextJSON` and full GraphQL sidecar media trees.
+  3. Mobile API fallback (`https://i.instagram.com/api/v1/media/{media_id}/info/`) extracts `carousel_media` and full resolutions.
+  4. Serverless timeouts are clamped to 8s (instead of 25s) to guarantee functions never stall past Vercel's 30s limit.
 
 ---
 

@@ -1,6 +1,8 @@
-from urllib.parse import urlparse
+import json
 import re
 from typing import List, Optional, Dict, Any
+from urllib.parse import urlparse
+import requests
 import yt_dlp
 from extractors.base import BaseExtractor
 from models.result import AnalysisResult
@@ -12,6 +14,7 @@ from utils.logging import get_logger
 
 logger = get_logger("linkforge.extractors.instagram")
 INSTAGRAM_PATTERN = re.compile(r"(?:www\.)?instagram\.com", re.IGNORECASE)
+ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
 
 
 class InstagramExtractor(BaseExtractor):
@@ -22,12 +25,26 @@ class InstagramExtractor(BaseExtractor):
         return bool(INSTAGRAM_PATTERN.search(hostname))
 
     @staticmethod
+    def _extract_shortcode(url: str) -> Optional[str]:
+        """Extract Instagram shortcode from post/reel URL."""
+        match = re.search(r"/(?:p|reel|tv|reels)/([A-Za-z0-9_-]+)", url)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _shortcode_to_mediaid(shortcode: str) -> str:
+        """Convert Instagram base64-style shortcode to numerical media_id."""
+        media_id = 0
+        for char in shortcode:
+            if char in ALPHABET:
+                media_id = media_id * 64 + ALPHABET.index(char)
+        return str(media_id)
+
+    @staticmethod
     def _select_best_video_format(formats: List[Dict[str, Any]]) -> Optional[str]:
         """Select best progressive video format with audio, avoiding audio-only DASH streams."""
         if not formats:
             return None
 
-        # Filter candidates that have a direct URL and are not audio-only
         video_candidates = [f for f in formats if f.get("url") and f.get("vcodec") != "none"]
         if not video_candidates:
             video_candidates = [f for f in formats if f.get("url")]
@@ -48,55 +65,15 @@ class InstagramExtractor(BaseExtractor):
             key=lambda f: (f.get("height") or 0, f.get("width") or 0, f.get("tbr") or 0)
         ).get("url")
 
-    def _extract_via_instagram_ie(self, url: str) -> Optional[AnalysisResult]:
-        """Extract media using yt-dlp's InstagramIE directly.
+    def _convert_info_to_analysis_result(self, info: Dict[str, Any]) -> Optional[AnalysisResult]:
+        """Convert a normalized media info dictionary into an AnalysisResult.
         
-        This handles both single posts (photos and videos) and multi-item carousels,
-        retaining full-resolution image URLs that standard yt-dlp video extractors
-        discard when format checks fail on static photos.
+        Handles:
+        - Image carousels (multiple photo selection, PDF, DOCX, ZIP)
+        - Video collections and reels (progressive MP4, MKV, audio track extraction)
+        - Mixed media collections (images + videos in one post)
+        - Dedicated audio/music track extraction
         """
-        proxies = YtDlpService.get_active_proxies()
-        candidate_proxies = list(proxies) if proxies else [None]
-        if candidate_proxies and candidate_proxies[0] is not None:
-            candidate_proxies.append(None)
-
-        info = None
-        for current_proxy in candidate_proxies[:3]:
-            extra_opts = {
-                "skip_download": True,
-                "quiet": True,
-                "referer": "https://www.instagram.com/",
-                "http_headers": {
-                    "Referer": "https://www.instagram.com/",
-                    "Origin": "https://www.instagram.com",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                }
-            }
-            if current_proxy:
-                extra_opts["proxy"] = current_proxy
-
-            opts = YtDlpService.get_default_opts(extra_opts)
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ie = ydl.get_info_extractor("Instagram")
-                    ie.initialize()
-
-                    # Override raise_no_formats so single photo posts return metadata instead of raising ExtractorError
-                    orig_raise_no_formats = ie.raise_no_formats
-                    ie.raise_no_formats = lambda msg, expected=True: None
-                    try:
-                        info = ie._real_extract(url)
-                    finally:
-                        ie.raise_no_formats = orig_raise_no_formats
-
-                if info and isinstance(info, dict):
-                    break
-            except Exception as e:
-                logger.warning(f"Direct InstagramIE extraction trial failed for {url} (proxy={bool(current_proxy)}): {e}")
-
-        if not info or not isinstance(info, dict):
-            return None
-
         title = info.get("title") or "Instagram Media"
         description = info.get("description")
         entries = info.get("entries")
@@ -135,15 +112,15 @@ class InstagramExtractor(BaseExtractor):
                     cands = entry.get("image_versions2", {}).get("candidates", [])
                     thumbnails = [{"url": c.get("url")} for c in cands if c.get("url")]
 
-                is_video = bool(formats)
+                is_video = bool(formats) or bool(entry.get("is_video")) or entry.get("__typename") == "GraphVideo"
 
                 if is_video:
                     has_videos = True
-                    direct_url = self._select_best_video_format(formats)
+                    direct_url = self._select_best_video_format(formats) if formats else entry.get("video_url")
                     ext = "mp4"
                     mime = "video/mp4"
                     media_type = "video"
-                    thumb = thumbnails[-1].get("url") if thumbnails else None
+                    thumb = thumbnails[-1].get("url") if thumbnails else (entry.get("display_url") or entry.get("thumbnail_src"))
                 else:
                     has_images = True
                     # The last thumbnail in yt-dlp candidates is the highest resolution original image
@@ -233,15 +210,15 @@ class InstagramExtractor(BaseExtractor):
             # Single item (photo or video/reel)
             formats = info.get("formats") or []
             thumbnails = info.get("thumbnails") or []
-            is_video = bool(formats)
+            is_video = bool(formats) or bool(info.get("is_video")) or info.get("__typename") == "GraphVideo"
             entry_id = info.get("id") or "media"
 
             if is_video:
                 content_type = "video"
-                direct_url = self._select_best_video_format(formats)
+                direct_url = self._select_best_video_format(formats) if formats else info.get("video_url")
                 ext = "mp4"
                 mime = "video/mp4"
-                thumb = thumbnails[-1].get("url") if thumbnails else None
+                thumb = thumbnails[-1].get("url") if thumbnails else (info.get("display_url") or info.get("thumbnail_src"))
                 available_formats = ["mp4", "mkv", "webm", "audio", "mp3", "m4a"]
 
                 if not direct_url:
@@ -315,18 +292,131 @@ class InstagramExtractor(BaseExtractor):
                 description=description
             )
 
+    def _extract_via_instagram_ie(self, url: str) -> Optional[AnalysisResult]:
+        """Extract media using yt-dlp's InstagramIE directly."""
+        proxies = YtDlpService.get_active_proxies()
+        candidate_proxies = list(proxies) if proxies else [None]
+        if candidate_proxies and candidate_proxies[0] is not None:
+            candidate_proxies.append(None)
+
+        info = None
+        for current_proxy in candidate_proxies[:2]:
+            extra_opts = {
+                "skip_download": True,
+                "quiet": True,
+                "socket_timeout": 8,
+                "referer": "https://www.instagram.com/",
+                "http_headers": {
+                    "Referer": "https://www.instagram.com/",
+                    "Origin": "https://www.instagram.com",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                }
+            }
+            if current_proxy:
+                extra_opts["proxy"] = current_proxy
+
+            opts = YtDlpService.get_default_opts(extra_opts)
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ie = ydl.get_info_extractor("Instagram")
+                    ie.initialize()
+
+                    orig_raise_no_formats = ie.raise_no_formats
+                    ie.raise_no_formats = lambda msg, expected=True: None
+                    try:
+                        info = ie._real_extract(url)
+                    finally:
+                        ie.raise_no_formats = orig_raise_no_formats
+
+                if info and isinstance(info, dict):
+                    break
+            except Exception as e:
+                logger.debug(f"Direct InstagramIE extraction trial failed for {url} (proxy={bool(current_proxy)}): {e}")
+
+        if not info or not isinstance(info, dict):
+            return None
+
+        return self._convert_info_to_analysis_result(info)
+
+    def _extract_via_embed_or_api(self, url: str) -> Optional[AnalysisResult]:
+        """Fallback extractor using public Instagram embed pages or mobile API info."""
+        shortcode = self._extract_shortcode(url)
+        if not shortcode:
+            return None
+
+        # 1. Try Embed page contextJSON
+        embed_url = f"https://www.instagram.com/p/{shortcode}/embed/"
+        embed_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.instagram.com/",
+        }
+
+        try:
+            r = requests.get(embed_url, headers=embed_headers, timeout=6)
+            if r.status_code == 200:
+                key = '"contextJSON":'
+                idx = r.text.find(key)
+                if idx != -1:
+                    substr = r.text[idx + len(key):].lstrip()
+                    inner, _ = json.JSONDecoder().raw_decode(substr)
+                    context = json.loads(inner)
+                    media = (context.get("gql_data") or {}).get("shortcode_media")
+                    if media and isinstance(media, dict):
+                        res = self._convert_info_to_analysis_result(media)
+                        if res and res.success and res.media_count > 0:
+                            return res
+        except Exception as e:
+            logger.debug(f"Instagram embed contextJSON extraction failed for {shortcode}: {e}")
+
+        # 2. Try Mobile API with X-IG-App-ID
+        media_id = self._shortcode_to_mediaid(shortcode)
+        if media_id and media_id != "0":
+            api_url = f"https://i.instagram.com/api/v1/media/{media_id}/info/"
+            mobile_headers = {
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0.0.0.0",
+                "X-IG-App-ID": "936619743392459",
+                "X-ASBD-ID": "198387",
+                "X-IG-WWW-Claim": "0",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Origin": "https://www.instagram.com",
+                "Referer": f"https://www.instagram.com/p/{shortcode}/",
+            }
+            try:
+                r2 = requests.get(api_url, headers=mobile_headers, timeout=6)
+                if r2.status_code == 200:
+                    api_data = r2.json()
+                    items = api_data.get("items") or []
+                    if items and isinstance(items, list):
+                        item = items[0]
+                        item["id"] = shortcode
+                        item["title"] = (item.get("caption") or {}).get("text", "")[:100] if isinstance(item.get("caption"), dict) else f"Instagram Media {shortcode}"
+                        res = self._convert_info_to_analysis_result(item)
+                        if res and res.success and res.media_count > 0:
+                            return res
+            except Exception as e:
+                logger.debug(f"Instagram mobile API extraction failed for {media_id}: {e}")
+
+        return None
+
     def analyze(self, url: str) -> AnalysisResult:
-        # 1. Try specialized InstagramIE extraction (handles carousels & photo posts)
+        # 1. Specialized InstagramIE extraction (handles carousels & photo posts)
         direct_res = self._extract_via_instagram_ie(url)
         if direct_res and direct_res.success and direct_res.media_count > 0:
             return direct_res
 
-        # 2. Try standard YtDlpService extraction
+        # 2. Resilient Embed & Mobile API extraction
+        embed_res = self._extract_via_embed_or_api(url)
+        if embed_res and embed_res.success and embed_res.media_count > 0:
+            return embed_res
+
+        # 3. Standard YtDlpService extraction
         res = YtDlpService.analyze_url(url, platform_hint="Instagram")
         if res.success and res.media_count > 0:
             return res
 
-        # 3. Fallback to OpenGraph inspection if public web preview is available
+        # 4. Fallback to OpenGraph inspection if public web preview is available
         og_res = GenericDownloader.analyze(url)
         if og_res.success and og_res.media_count > 0:
             og_res.platform = "Instagram"
@@ -337,7 +427,7 @@ class InstagramExtractor(BaseExtractor):
             platform="Instagram",
             content_type="unknown",
             error_code="CONTENT_UNAVAILABLE",
-            error_message="Unable to access Instagram post. The account may be private or requires login."
+            error_message="Unable to access Instagram post. The account may be private or requires login. If running in the cloud, ensure INSTAGRAM_COOKIES is configured in project settings."
         )
 
     def extract(self, url: str) -> List[MediaItem]:
