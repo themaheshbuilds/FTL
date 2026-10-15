@@ -69,4 +69,8 @@ storage/test_generated/
 *cookies*.txt
 cookies.txt
 
+# Scratch
+scratch/
+
+
 

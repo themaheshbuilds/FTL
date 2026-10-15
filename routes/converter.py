@@ -11,7 +11,7 @@ logger = get_logger("linkforge.routes.converter")
 converter_bp = Blueprint("converter", __name__, url_prefix="/api")
 
 
-@converter_bp.route("/convert", methods=["POST"])
+@converter_bp.route("/convert", methods=["POST"], strict_slashes=False)
 def convert_endpoint():
     """POST /api/convert
     Accepts uploaded file(s) and converts them based on conversion_type.

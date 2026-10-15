@@ -7,8 +7,8 @@ logger = get_logger("linkforge.routes.email")
 email_bp = Blueprint("email", __name__)
 
 
-@email_bp.route("/api/send-email", methods=["POST"])
-@email_bp.route("/api/email", methods=["POST"])
+@email_bp.route("/api/send-email", methods=["POST"], strict_slashes=False)
+@email_bp.route("/api/email", methods=["POST"], strict_slashes=False)
 def send_email_route():
     """POST /api/send-email
     Deliver a generated or converted file to a user's email address.

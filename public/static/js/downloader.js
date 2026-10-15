@@ -196,8 +196,7 @@ const DownloaderApp = {
 
             const contentType = response.headers.get("content-type") || "";
             if (!contentType.includes("application/json")) {
-                const text = await response.text();
-                this.showError(text || `Server returned status ${response.status}`);
+                this.showError(`Service connection error (Status ${response.status}). Please verify the link or try again.`);
                 return;
             }
 
@@ -233,11 +232,12 @@ const DownloaderApp = {
         if (platformBadge) platformBadge.textContent = data.platform || "Direct Web";
         if (typeBadge) typeBadge.textContent = (data.content_type || "Media").replace(/_/g, " ");
 
-        // Partition items into images, videos, audios
+        // Partition items into images, videos, audios, and documents/files
         const items = data.items || [];
         const images = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type === "image");
         const videos = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type === "video");
         const audios = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type === "audio");
+        const otherFiles = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type !== "image" && it.media_type !== "video" && it.media_type !== "audio");
 
         if (titleEl) {
             titleEl.textContent = data.title || `${data.platform || "Media"} Download`;
@@ -248,6 +248,7 @@ const DownloaderApp = {
             if (images.length > 0) parts.push(`${images.length} Image${images.length > 1 ? "s" : ""}`);
             if (videos.length > 0) parts.push(`${videos.length} Video${videos.length > 1 ? "s" : ""}`);
             if (audios.length > 0) parts.push(`${audios.length} Audio Track`);
+            if (otherFiles.length > 0) parts.push(`${otherFiles.length} File${otherFiles.length > 1 ? "s" : ""}`);
             summaryEl.textContent = parts.length > 0 ? parts.join(" • ") + " detected." : "Ready to package and download.";
         }
 
@@ -527,6 +528,74 @@ const DownloaderApp = {
 
                     audGrid.appendChild(card);
                 });
+            }
+
+            // 4. DOCUMENTS & GENERAL FILES SECTION
+            if (otherFiles.length > 0) {
+                const docSection = document.createElement("div");
+                docSection.className = "media-seg-section";
+                docSection.innerHTML = `
+                    <div class="media-seg-header">
+                        <div class="media-seg-title">
+                            <span>&#x1F4C4;</span> Files &amp; Documents (${otherFiles.length})
+                        </div>
+                    </div>
+                    <div class="audios-collection-grid" id="other-files-collection-grid"></div>
+                `;
+
+                previewContainer.appendChild(docSection);
+                const fileGrid = docSection.querySelector("#other-files-collection-grid");
+
+                otherFiles.forEach((fileItem, i) => {
+                    const card = document.createElement("div");
+                    card.className = "audio-item-card";
+                    const fsizeStr = fileItem.filesize ? `${(fileItem.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready";
+                    card.innerHTML = `
+                        <div class="audio-card-icon-box">&#x1F4C4;</div>
+                        <div class="audio-card-details">
+                            <div class="audio-track-title">${fileItem.filename || fileItem.title || `File #${i + 1}`}</div>
+                            <div class="video-item-sub">${fsizeStr} • ${(fileItem.mime_type || "Downloadable File")}</div>
+                        </div>
+                        <div class="audio-card-actions">
+                            <button type="button" class="btn-audio-action btn-file-dl" data-index="${fileItem.origIndex}">
+                                &#x2193; Download File
+                            </button>
+                        </div>
+                    `;
+
+                    const dlBtn = card.querySelector(".btn-file-dl");
+                    if (dlBtn) {
+                        dlBtn.addEventListener("click", () => {
+                            this.startDownload({
+                                format: "original",
+                                selected_indices: [fileItem.origIndex],
+                                custom_filename: fileItem.filename || `file_${i + 1}`
+                            });
+                        });
+                    }
+
+                    fileGrid.appendChild(card);
+                });
+            }
+
+            // 5. Fallback card when no individual media items exist
+            if (images.length === 0 && videos.length === 0 && audios.length === 0 && otherFiles.length === 0) {
+                const genericCard = document.createElement("div");
+                genericCard.className = "media-seg-section";
+                genericCard.innerHTML = `
+                    <div class="media-seg-header">
+                        <div class="media-seg-title">
+                            <span>&#x1F5BC;&#xFE0F;</span> Detected Media Package
+                        </div>
+                    </div>
+                    <div style="padding: 16px 20px; background: rgba(255,255,255,0.85); border: 1px solid var(--border-light); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--text-heading); font-size: 15px;">${data.title || "Ready to Package"}</div>
+                            <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Select your preferred output format below and click Download.</div>
+                        </div>
+                    </div>
+                `;
+                previewContainer.appendChild(genericCard);
             }
         }
 

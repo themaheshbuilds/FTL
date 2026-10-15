@@ -121,6 +121,15 @@ class EmailService:
                 "Please add your Gmail App Password to SMTP_PASSWORD in .env."
             )
 
+        # Created date string
+        created_date_str = ""
+        if job and job.created_at:
+            if isinstance(job.created_at, (int, float)):
+                from datetime import datetime
+                created_date_str = datetime.fromtimestamp(job.created_at).strftime("%B %d, %Y")
+            elif hasattr(job.created_at, "strftime"):
+                created_date_str = job.created_at.strftime("%B %d, %Y")
+
         # Clean subject - no emoji (spam trigger)
         subject = f"Your file is ready: {filename} ({size_str})"
 
@@ -194,6 +203,10 @@ class EmailService:
                   <tr>
                     <td style="color:#6b7280;font-size:14px;">Size</td>
                     <td style="color:#111827;font-size:14px;font-weight:600;">{size_str}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#6b7280;font-size:14px;width:90px;">Created On</td>
+                    <td style="color:#111827;font-size:14px;font-weight:600;">{created_date_str}</td>
                   </tr>
                   <tr>
                     <td style="color:#6b7280;font-size:14px;">Status</td>

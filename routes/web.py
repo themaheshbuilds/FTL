@@ -103,29 +103,40 @@ CONVERTER_TOOLS = {
 }
 
 
-@web_bp.route("/", methods=["GET"])
-@web_bp.route("/index", methods=["GET"])
-@web_bp.route("/api/index", methods=["GET"])
-@web_bp.route("/api/index.py", methods=["GET"])
+@web_bp.route("/", methods=["GET"], strict_slashes=False)
+@web_bp.route("/index", methods=["GET"], strict_slashes=False)
+@web_bp.route("/index.html", methods=["GET"], strict_slashes=False)
+@web_bp.route("/home", methods=["GET"], strict_slashes=False)
+@web_bp.route("/api/index", methods=["GET"], strict_slashes=False)
+@web_bp.route("/api/index.py", methods=["GET"], strict_slashes=False)
 def index():
     """Render LinkForge Home Page."""
     return render_template("index.html", tools=CONVERTER_TOOLS)
 
 
-@web_bp.route("/downloader", methods=["GET"])
-@web_bp.route("/link-downloader", methods=["GET"])
+@web_bp.route("/downloader", methods=["GET"], strict_slashes=False)
+@web_bp.route("/downloader.html", methods=["GET"], strict_slashes=False)
+@web_bp.route("/download", methods=["GET"], strict_slashes=False)
+@web_bp.route("/link-downloader", methods=["GET"], strict_slashes=False)
+@web_bp.route("/link-downloader.html", methods=["GET"], strict_slashes=False)
+@web_bp.route("/quick-downloader", methods=["GET"], strict_slashes=False)
 def downloader():
     """Render dedicated Link Downloader page."""
     return render_template("downloader.html")
 
 
-@web_bp.route("/converter", methods=["GET"])
+@web_bp.route("/converter", methods=["GET"], strict_slashes=False)
+@web_bp.route("/converter.html", methods=["GET"], strict_slashes=False)
+@web_bp.route("/converters", methods=["GET"], strict_slashes=False)
+@web_bp.route("/tools", methods=["GET"], strict_slashes=False)
 def converter():
     """Render Universal File Converter Hub."""
     return render_template("converter.html", tools=CONVERTER_TOOLS)
 
 
-@web_bp.route("/converter/<tool_slug>", methods=["GET"])
+@web_bp.route("/converter/<tool_slug>", methods=["GET"], strict_slashes=False)
+@web_bp.route("/tool/<tool_slug>", methods=["GET"], strict_slashes=False)
+@web_bp.route("/tools/<tool_slug>", methods=["GET"], strict_slashes=False)
 def converter_tool(tool_slug):
     """Render dedicated page for a specific conversion tool."""
     tool = CONVERTER_TOOLS.get(tool_slug)

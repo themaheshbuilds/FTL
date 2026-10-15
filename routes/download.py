@@ -9,8 +9,8 @@ logger = get_logger("linkforge.download")
 download_bp = Blueprint("download", __name__)
 
 
-@download_bp.route("/download/<file_id>", methods=["GET"])
-@download_bp.route("/api/download/<file_id>", methods=["GET"])
+@download_bp.route("/download/<file_id>", methods=["GET"], strict_slashes=False)
+@download_bp.route("/api/download/<file_id>", methods=["GET"], strict_slashes=False)
 def download_file(file_id: str):
     """GET /download/<file_id>
     Streams or delivers the generated package file to the user.

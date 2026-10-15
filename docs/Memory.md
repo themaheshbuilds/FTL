@@ -285,11 +285,13 @@ pytest -v
 # 9. Vercel Serverless Architecture & Deployment Gotchas
 
 ### Serverless Function Configuration
-- **Entrypoint:** Root `app.py` is the official WSGI application entrypoint automatically detected by Vercel's Flask framework preset.
-- **Path Routing:** No path-distorting `rewrites` are needed in `vercel.json` because Vercel's Flask preset maps all routes (`/`, `/health`, `/api/analyze`, etc.) directly to Flask preserving original paths. Resilient aliases (`/index`, `/api/index`, `/api/index.py`) are also handled in `routes/web.py`.
-- **Template Bundling:** `vercel.json` configures `"functions": { "app.py": { "includeFiles": "templates/**", "maxDuration": 30 } }` to ensure Jinja templates are packaged in AWS Lambda `/var/task`.
+- **Entrypoints:** Root `app.py` and `api/index.py` both serve the WSGI application object `app`.
+- **Path Routing:** `vercel.json` defines rewrites `[{"source": "/(.*)", "destination": "/app.py"}]` ensuring dynamic sub-paths (`/downloader`, `/converter`, `/api/analyze`, `/api/generate`, `/download/<file_id>`) route directly to Flask.
+- **Permissive Slashing:** `app.url_map.strict_slashes = False` is set on Flask application factory to handle all URLs with or without trailing slashes.
+- **Template Bundling:** `vercel.json` configures `"functions": { "api/index.py": { "includeFiles": "{templates/**,static/**}", "maxDuration": 30 }, "app.py": { "includeFiles": "{templates/**,static/**}", "maxDuration": 30 } }` to ensure templates are bundled in serverless package.
 - **Static Assets via CDN:** Static assets are mirrored into `public/static/` so Vercel Edge CDN serves CSS and JavaScript directly without cold starts.
 - **Serverless Storage:** Lambda filesystems are read-only except `/tmp`. `config.py` detects serverless runtimes (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `LAMBDA_TASK_ROOT`, etc.) and automatically routes `TEMP_STORAGE_DIR` and `GENERATED_STORAGE_DIR` to `/tmp/linkforge/...` with resilient fallback handling.
+- **Disk Recovery across Ephemeral Containers:** `JobService` writes `meta.json` inside generated folders and implements a two-tier disk scan so subsequent lambda invocations can serve download files even if in-memory state is cleared.
 - **Dependencies:** `beautifulsoup4` is required for LinkedIn & generic HTML metadata extraction; `pytest` is excluded from production `requirements.txt` to keep the deployment package lightweight. `.vercelignore` excludes tests, scratch scripts, docs, and git files.
 - **Instagram Cloud Extraction & Cookies:** Cloud datacenter IPs (Vercel/AWS Lambda) face Instagram login challenges. To guarantee 100% extraction:
   1. `INSTAGRAM_COOKIES` or `COOKIES_TEXT` environment variables are parsed and written to `/tmp/linkforge_env_cookies.txt`.

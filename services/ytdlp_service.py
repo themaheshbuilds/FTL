@@ -219,18 +219,28 @@ class YtDlpService:
     @classmethod
     def extract_info(cls, url: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """Extract metadata without downloading files, attempting full resolution first then mobile fallbacks."""
-        client_configs = [
-            # 1. Primary: Default web/visionos/safari clients without TV client (avoids "page needs to be reloaded")
-            ({"player_client": ["default", "-tv"]}, True),
-            # 2. VisionOS client with cookies (unrestricted 4K streams)
-            ({"player_client": ["visionos"]}, True),
-            # 3. Safari client with cookies
-            ({"player_client": ["safari"]}, True),
-            # 4. Cloud Fallback: android mobile client WITHOUT cookies (mobile clients reject cookies, but bypass datacenter blocks)
-            ({"player_client": ["android"], "player_skip": ["webpage", "configs"]}, False),
-            # 5. Fallback: dedicated ios client WITHOUT cookies
-            ({"player_client": ["ios"], "player_skip": ["webpage", "configs"]}, False),
-        ]
+        import re
+        is_youtube = bool(re.search(r"(?:youtube\.com|youtu\.be)", url, re.IGNORECASE))
+
+        if is_youtube:
+            client_configs = [
+                # 1. Primary: Default web/visionos/safari clients without TV client (avoids "page needs to be reloaded")
+                ({"player_client": ["default", "-tv"]}, True),
+                # 2. VisionOS client with cookies (unrestricted 4K streams)
+                ({"player_client": ["visionos"]}, True),
+                # 3. Safari client with cookies
+                ({"player_client": ["safari"]}, True),
+                # 4. Cloud Fallback: android mobile client WITHOUT cookies (mobile clients reject cookies, but bypass datacenter blocks)
+                ({"player_client": ["android"], "player_skip": ["webpage", "configs"]}, False),
+                # 5. Fallback: dedicated ios client WITHOUT cookies
+                ({"player_client": ["ios"], "player_skip": ["webpage", "configs"]}, False),
+            ]
+        else:
+            # For non-YouTube platforms (Reddit, Twitter, etc.), standard extraction with and without cookies
+            client_configs = [
+                (None, True),
+                (None, False)
+            ]
 
         last_error = ""
         proxies = cls.get_active_proxies()

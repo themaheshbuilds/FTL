@@ -8,8 +8,8 @@ from services.ytdlp_service import YtDlpService
 health_bp = Blueprint("health", __name__)
 
 
-@health_bp.route("/health", methods=["GET"])
-@health_bp.route("/api/health", methods=["GET"])
+@health_bp.route("/health", methods=["GET"], strict_slashes=False)
+@health_bp.route("/api/health", methods=["GET"], strict_slashes=False)
 def health_check():
     """Health check endpoint.
     
@@ -19,7 +19,7 @@ def health_check():
     return jsonify({"status": "ok"}), 200
 
 
-@health_bp.route("/api/debug_yt", methods=["GET"])
+@health_bp.route("/api/debug_yt", methods=["GET"], strict_slashes=False)
 def debug_yt():
     url = request.args.get("url", "https://youtu.be/xvT1jH8B9AM")
     client = request.args.get("client", "service")

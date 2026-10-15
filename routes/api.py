@@ -8,7 +8,7 @@ logger = get_logger("linkforge.api")
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 
-@api_bp.route("/analyze", methods=["POST"])
+@api_bp.route("/analyze", methods=["POST"], strict_slashes=False)
 def analyze_endpoint():
     """POST /api/analyze
     Analyzes submitted URL and returns detected content metadata and available formats.
@@ -39,7 +39,7 @@ def analyze_endpoint():
     return jsonify(result.to_dict()), status_code
 
 
-@api_bp.route("/generate", methods=["POST"])
+@api_bp.route("/generate", methods=["POST"], strict_slashes=False)
 def generate_endpoint():
     """POST /api/generate
     Processes and packages content into the requested format (PDF, ZIP, MP4, original).
