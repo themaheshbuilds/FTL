@@ -253,7 +253,7 @@ const Analyzer = {
             "docx": { label: isCollection ? `Word Doc (${count} Pages)` : "Word Document", ext: ".docx", icon: "📝" },
             "doc": { label: "Word Document", ext: ".docx", icon: "📝" },
             "zip": { label: isCollection ? `ZIP Archive (${count} Files)` : "Download as ZIP", ext: ".zip", icon: "🗂️" },
-            "images_zip": { label: `Images ZIP (${count} Files)`, ext: ".zip", icon: "🗂️" },
+            "images_zip": { label: `Images as ZIP (${count} Files)`, ext: ".zip", icon: "🗂️" },
             "images": { label: `All Images (${count} Files)`, ext: ".zip", icon: "🗂️" },
             "all_zip": { label: `Complete ZIP (${count} Files)`, ext: ".zip", icon: "🗂️" }
         };
