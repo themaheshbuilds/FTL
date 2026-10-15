@@ -366,5 +366,39 @@ pytest -v
   2. Generate a 16-character **App Password** for "LinkForge".
   3. Store in `.env` as `SMTP_PASSWORD=xxxx xxxx xxxx xxxx` (and in Vercel Environment Variables).
 
+---
+
+# 12. Vercel Serverless Routing & Navigation Gotchas
+
+### 1. Canonical Vercel Rewrite Destination (`/api/index`)
+- **The Problem:** 
+  1. Specifying `"destination": "/api/index.py?__path__=/$1"` or `/app.py` in `vercel.json` breaks Vercel's serverless function invocation. Vercel function names exclude extensions (targeting `api/index.py` requires `"destination": "/api/index"`), and query parameter pollution leads to routing mismatches or raw 404s.
+  2. Adding `@web_bp.route("/api/index")` directly to the `index()` home page function causes every rewritten route (`/downloader`, `/converter`, etc.) to hit the homepage handler and render the home screen instead of the target page.
+- **The Solution:**
+  - `vercel.json` rewrite rule is canonical:
+    ```json
+    {
+      "rewrites": [
+        {
+          "source": "/(.*)",
+          "destination": "/api/index"
+        }
+      ]
+    }
+    ```
+  - In `api/index.py`, the `VercelPathFix` WSGI middleware inspects `environ.get("HTTP_X_MATCHED_PATH") or environ.get("HTTP_X_FORWARDED_URI")` and restores `environ["PATH_INFO"]` to the original client URL (e.g., `/downloader`, `/converter/pdf-to-images`, `/api/analyze`), allowing Flask blueprints to match routes transparently without any `@web_bp.route("/api/index")` collision.
+
+### 2. Dual 404 Errorhandler (HTML vs. JSON)
+- **The Problem:** When users navigated to a mistyped or missing page on Vercel, returning raw JSON `{"error": {"code": "NOT_FOUND", ...}}` dumped an unstyled raw JSON string on a blank browser screen, leading users to believe the site was broken.
+- **The Solution in `app.py` (`handle_not_found`):**
+  - Evaluates `request.headers.get("Accept", "")`:
+    - If the browser explicitly requests `text/html` and is not hitting an `/api/` route, it renders `templates/error.html` with full LinkForge Peach styling and a prominent "Return to Home" button.
+    - If an API or programmatic client requests a missing resource (or for `/api/*` routes), it returns structured JSON (`code: "NOT_FOUND"`).
+
+### 3. Response Cache-Busting & Stale Service Worker Neutralization
+- In `app.py`, an `@app.after_request` hook injects `Cache-Control: no-cache, no-store, must-revalidate, max-age=0` on all HTML responses to prevent intermediate proxy or browser cache locking.
+- In `templates/`, an inline head script unregisters any active Service Workers and clears CacheStorage to prevent outdated offline cache intercepts during deployment updates.
+
+
 
 

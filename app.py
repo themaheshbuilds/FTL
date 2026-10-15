@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, render_template
 from config import get_config, Config
 from routes.health import health_bp
 from routes.web import web_bp
@@ -61,6 +61,20 @@ def create_app(config_object=None) -> Flask:
     # Application-wide error handlers
     @app.errorhandler(404)
     def handle_not_found(e):
+        accept_header = request.headers.get("Accept", "")
+        # Render HTML error page if requested by a web browser explicitly asking for HTML
+        if (
+            accept_header.startswith("text/html")
+            and not request.path.startswith("/api/")
+            and not request.is_json
+        ):
+            return render_template(
+                "error.html",
+                error_code="404",
+                error_title="Page Not Found",
+                error_message="The page you were looking for does not exist or has moved."
+            ), 404
+
         return jsonify({
             "success": False,
             "error": {
