@@ -107,8 +107,6 @@ CONVERTER_TOOLS = {
 @web_bp.route("/index", methods=["GET"], strict_slashes=False)
 @web_bp.route("/index.html", methods=["GET"], strict_slashes=False)
 @web_bp.route("/home", methods=["GET"], strict_slashes=False)
-@web_bp.route("/api/index", methods=["GET"], strict_slashes=False)
-@web_bp.route("/api/index.py", methods=["GET"], strict_slashes=False)
 def index():
     """Render LinkForge Home Page."""
     return render_template("index.html", tools=CONVERTER_TOOLS)

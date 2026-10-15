@@ -286,7 +286,7 @@ pytest -v
 
 ### Serverless Function Configuration
 - **Entrypoint:** `api/index.py` is the official WSGI application entrypoint for Vercel Serverless Functions.
-- **Path Routing & Middleware:** `vercel.json` rewrites `[{"source": "/(.*)", "destination": "/api/index.py"}]`. Inside `api/index.py`, `VercelPathMiddleware` checks `HTTP_X_MATCHED_PATH` and restores the intended client route (`/downloader`, `/converter`, `/api/analyze`, etc.) to `PATH_INFO`.
+- **Path Routing & Middleware:** `vercel.json` rewrites `[{"source": "/(.*)", "destination": "/api/index.py?__path__=/$1"}]`. Inside `api/index.py`, `VercelPathMiddleware` extracts `__path__` and restores the intended client route (`/downloader`, `/converter`, `/converter/<tool_slug>`, `/api/analyze`, etc.) into `PATH_INFO`, cleaning `request.args` so dynamic multi-page navigation functions flawlessly.
 - **Permissive Slashing:** `app.url_map.strict_slashes = False` is set on Flask application factory to handle all URLs with or without trailing slashes.
 - **Template Bundling:** `vercel.json` configures `"functions": { "api/index.py": { "includeFiles": "templates/**", "maxDuration": 30 } }` to ensure templates are bundled in serverless package.
 - **Static Assets via CDN:** Static assets are mirrored into `public/static/` so Vercel Edge CDN serves CSS and JavaScript directly without cold starts.
