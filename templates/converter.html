@@ -23,19 +23,23 @@
         <!-- Mode Nav Switcher -->
         <nav class="mode-nav" role="tablist">
           <a href="/" class="mode-tab" role="tab">
+            <span class="icon">&#x1F3E0;</span>
+            <span class="pill-label">Home</span>
+          </a>
+          <a href="/downloader" class="mode-tab" role="tab">
             <span class="icon">&#x1F517;</span>
-            <span class="pill-label">Link Downloader</span>
+            <span class="pill-label">Downloader</span>
           </a>
           <a href="/converter" class="mode-tab active" role="tab">
             <span class="icon">&#x21C4;</span>
-            <span class="pill-label">File Converter</span>
+            <span class="pill-label">Converters</span>
           </a>
         </nav>
 
         <!-- Header Actions -->
         <div class="header-actions">
           <button type="button" class="ghost-btn" id="open-about-modal">About</button>
-          <button type="button" class="ghost-btn" id="open-formats-modal">Supported Formats</button>
+          <button type="button" class="ghost-btn" id="open-formats-modal"><span class="desktop-only">Supported </span>Formats</button>
         </div>
       </div>
     </header>
@@ -258,10 +262,11 @@
 
     <!-- Footer -->
     <footer class="site-footer">
-      <p>&copy; 2026 LinkForge. Universal Link Downloader &amp; File Converter Engine.</p>
+      <p>&copy; 2026 LinkForge. Universal Link Downloader &amp; File Converter Suite.</p>
       <div class="footer-links">
-        <a href="/">Link Downloader</a>
-        <a href="/converter">File Converter</a>
+        <a href="/">Home</a>
+        <a href="/downloader">Link Downloader</a>
+        <a href="/converter">File Converters</a>
       </div>
     </footer>
 

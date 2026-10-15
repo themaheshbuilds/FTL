@@ -206,6 +206,7 @@ const ConverterApp = {
         const filtered = category === "all" ? this.tools : this.tools.filter(t => t.category === category);
 
         filtered.forEach(tool => {
+            const slug = tool.id.replace(/_/g, '-');
             const card = document.createElement("div");
             card.className = `tool-card ${this.activeTool && this.activeTool.id === tool.id ? "active" : ""}`;
             card.setAttribute("data-tool-id", tool.id);
@@ -214,6 +215,12 @@ const ConverterApp = {
                 <div class="tool-card-title">${tool.title}</div>
                 <div class="tool-card-badge">${tool.badge}</div>
                 <div class="tool-card-desc">${tool.desc}</div>
+                <div class="tool-card-actions">
+                    <span class="tool-select-tag">Use Here</span>
+                    <a href="/converter/${slug}" class="tool-page-link" onclick="event.stopPropagation();" title="Open dedicated page for ${tool.title}">
+                        Dedicated Page &#x2197;
+                    </a>
+                </div>
             `;
 
             card.addEventListener("click", () => {

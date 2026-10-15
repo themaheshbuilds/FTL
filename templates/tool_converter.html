@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{{ tool.title }} — Free Online Converter | LinkForge</title>
+  <meta name="description" content="{{ tool.desc }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261015">
+</head>
+<body>
+  <div class="app-wrapper">
+
+    <!-- Top Navigation Header -->
+    <header class="site-header">
+      <div class="header-container">
+        <a href="/" class="brand-logo" id="brand-link">
+          <div class="brand-icon-box">&#x26A1;</div>
+          <span class="brand-name">LINKFORGE</span>
+        </a>
+
+        <!-- Mode Nav Switcher -->
+        <nav class="mode-nav" role="tablist">
+          <a href="/" class="mode-tab" role="tab">
+            <span class="icon">&#x1F3E0;</span>
+            <span class="pill-label">Home</span>
+          </a>
+          <a href="/downloader" class="mode-tab" role="tab">
+            <span class="icon">&#x1F517;</span>
+            <span class="pill-label">Downloader</span>
+          </a>
+          <a href="/converter" class="mode-tab active" role="tab">
+            <span class="icon">&#x21C4;</span>
+            <span class="pill-label">Converters</span>
+          </a>
+        </nav>
+
+        <!-- Header Actions -->
+        <div class="header-actions">
+          <button type="button" class="ghost-btn" id="open-about-modal">About</button>
+          <button type="button" class="ghost-btn" id="open-formats-modal">Formats</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Main Content -->
+    <main class="page-container">
+      
+      <!-- Tool Hero Section -->
+      <section class="hero-section">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          {{ tool.badge }}
+        </div>
+        <h1 class="hero-title">
+          {{ tool.title }}<br>
+          <span class="hero-title-grad">Fast &amp; Free</span>
+        </h1>
+        <p class="hero-subtitle">
+          {{ tool.desc }}
+        </p>
+      </section>
+
+      <!-- Glassmorphic Dedicated Tool Card -->
+      <div class="glass-card">
+
+        <!-- 1. Upload View -->
+        <div id="tool-upload-view">
+          <div class="dropzone-container" id="tool-dropzone">
+            <input
+              type="file"
+              id="tool-file-input"
+              accept="{{ tool.accept }}"
+              {% if tool.multiple %}multiple{% endif %}
+              style="display:none"
+            >
+            <div class="dropzone-icon">{{ tool.icon }}</div>
+            <h3 class="dropzone-title">Drop your {{ tool.title }} files here</h3>
+            <p class="dropzone-sub">
+              Drag &amp; drop or <span class="browse-link" id="tool-browse-btn">browse your device</span>
+            </p>
+            <div class="file-chips-preview">
+              {% for ext in tool.accept.split(',') %}
+                <span class="platform-chip">{{ ext.replace('.', '').upper() }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Staged Files & Settings View -->
+        <div id="tool-config-view" class="hidden">
+          <div class="result-header">
+            <div>
+              <div class="result-meta-top">
+                <span class="badge-platform">{{ tool.icon }} {{ tool.badge }}</span>
+              </div>
+              <h2 class="result-title">Ready to Convert</h2>
+              <p class="result-summary">Selected files are staged. Configure your target output below.</p>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-reset-tool-config">&#x2190; Cancel</button>
+          </div>
+
+          <!-- Staged Files List -->
+          <div id="staged-files-list"></div>
+
+          <!-- Settings Row -->
+          <div class="settings-row" style="margin-top:20px">
+            <div class="setting-group">
+              <label class="setting-label" for="tool-format-select">Target Output Format</label>
+              <select id="tool-format-select" class="styled-select">
+                {% for fmt in tool.formats %}
+                  <option value="{{ fmt.value }}">{{ fmt.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="setting-group">
+              <label class="setting-label" for="tool-custom-filename">Custom Filename (Optional)</label>
+              <input type="text" id="tool-custom-filename" class="styled-input" placeholder="e.g. my_converted_file">
+            </div>
+          </div>
+
+          <!-- Convert CTA -->
+          <div style="text-align:center;margin-top:24px">
+            <button type="button" class="btn-primary" id="btn-start-tool-convert" style="min-width:240px;font-size:16px;padding:14px 32px">
+              &#x26A1; Convert File Now
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Converting Processing View -->
+        <div id="tool-processing-view" class="loading-view hidden">
+          <div class="spinner-ring"></div>
+          <h3 class="loading-title">Converting Your {{ tool.title }}...</h3>
+          <p class="loading-subtitle">Applying transformations and packaging your output</p>
+        </div>
+
+        <!-- 4. Success View -->
+        <div id="tool-success-view" class="success-view hidden">
+          <div class="success-badge-icon">&#x2713;</div>
+          <h2 class="success-title">Conversion Complete!</h2>
+          <p class="success-subtitle">Your converted file is ready for download.</p>
+
+          <div class="file-info-box">
+            <div class="file-info-row">
+              <span class="info-key">Filename</span>
+              <span class="info-value" id="tool-success-filename">file</span>
+            </div>
+            <div class="file-info-row">
+              <span class="info-key">File Size</span>
+              <span class="info-value" id="tool-success-filesize">0 MB</span>
+            </div>
+            <div class="file-info-row">
+              <span class="info-key">Output Format</span>
+              <span class="info-value" id="tool-success-format">{{ tool.formats[0].value.upper() }}</span>
+            </div>
+          </div>
+
+          <div class="success-actions">
+            <a href="#" class="btn-primary" id="tool-direct-download-btn" style="padding:14px 28px;font-size:15px">
+              &#x2193; Download Converted File
+            </a>
+            <button type="button" class="btn-secondary" id="btn-reset-tool-success">
+              Convert Another File
+            </button>
+          </div>
+
+          <!-- Email Delivery Widget -->
+          <div class="email-delivery-widget" id="tool-email-widget">
+            <div class="email-toggle-button" id="tool-email-toggle-btn">
+              <span class="email-toggle-title">
+                <span>&#x2709;&#xFE0F;</span> Send this file to your email
+              </span>
+              <span class="email-toggle-arrow">&#x25BC;</span>
+            </div>
+            <div class="email-form-panel">
+              <div class="email-input-row">
+                <input
+                  type="email"
+                  class="email-input-field"
+                  id="tool-email-input"
+                  placeholder="Enter your email address..."
+                  autocomplete="email"
+                >
+                <button type="button" class="email-send-button" id="tool-email-send-btn">
+                  Send
+                </button>
+              </div>
+              <div class="email-status-message" id="tool-email-status-message"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Error View -->
+        <div id="tool-error-view" class="error-view hidden">
+          <div class="error-badge-icon">&#x26A0;</div>
+          <h2 class="error-title">Conversion Failed</h2>
+          <p class="error-message" id="tool-error-message">
+            Unable to process this file. Please verify the file is not corrupted or password protected.
+          </p>
+          <button type="button" class="btn-primary" id="btn-reset-tool-error" style="min-width:180px">
+            Try Again
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Other Converter Tools Section -->
+      <div style="margin-top:55px">
+        <h3 style="font-size:18px;font-weight:700;color:var(--text-main);margin-bottom:16px;text-align:center">
+          Explore Other Conversion Tools
+        </h3>
+        <div class="tools-grid">
+          {% for other in other_tools %}
+            <a href="/converter/{{ other.slug }}" class="tool-card" style="text-decoration:none">
+              <div class="tool-card-icon-box">{{ other.icon }}</div>
+              <div class="tool-card-title">{{ other.title }}</div>
+              <div class="tool-card-badge">{{ other.badge }}</div>
+              <div class="tool-card-desc">{{ other.desc }}</div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Modals -->
+    <!-- About Modal -->
+    <div class="modal-backdrop" id="about-modal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">About LinkForge {{ tool.title }}</h3>
+          <button type="button" class="modal-close-btn" id="close-about-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <h4>Private &amp; Secure Processing</h4>
+          <p>
+            Files are transformed privately in secure sandbox storage and automatically deleted after 30 minutes.
+          </p>
+          <h4>Direct Email Delivery</h4>
+          <p>
+            You can email your finished file as a real file attachment straight to any inbox.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supported Formats Modal -->
+    <div class="modal-backdrop" id="formats-modal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">Supported Formats</h3>
+          <button type="button" class="modal-close-btn" id="close-formats-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <h4>Accepted Input for {{ tool.title }}</h4>
+          <p>{{ tool.accept }}</p>
+          <h4>Output Choices</h4>
+          <ul>
+            {% for fmt in tool.formats %}
+              <li><strong>{{ fmt.label }}</strong></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <p>&copy; 2026 LinkForge. Universal Link Downloader &amp; File Converter Suite.</p>
+      <div class="footer-links">
+        <a href="/">Home</a>
+        <a href="/downloader">Link Downloader</a>
+        <a href="/converter">All Converters</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    const TOOL_CONFIG = {
+      id: "{{ tool.id }}",
+      multiple: {{ 'true' if tool.multiple else 'false' }},
+      accept: "{{ tool.accept }}"
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/tool_converter.js') }}?v=20261015"></script>
+</body>
+</html>

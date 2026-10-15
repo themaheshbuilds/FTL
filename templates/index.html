@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LinkForge — Universal Link Downloader</title>
-  <meta name="description" content="Download and extract media from Instagram, YouTube, TikTok, Reddit, X, LinkedIn, Facebook, and any direct URL instantly.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LinkForge — Universal Media Downloader &amp; File Converter Suite</title>
+  <meta name="description" content="Download media from Instagram, YouTube, TikTok, Reddit, X, LinkedIn &amp; Facebook, or convert PDFs, documents, audio, video, and images in seconds.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261015">
@@ -23,19 +23,23 @@
         <!-- Mode Nav Switcher -->
         <nav class="mode-nav" role="tablist">
           <a href="/" class="mode-tab active" role="tab">
+            <span class="icon">&#x1F3E0;</span>
+            <span class="pill-label">Home</span>
+          </a>
+          <a href="/downloader" class="mode-tab" role="tab">
             <span class="icon">&#x1F517;</span>
-            <span class="pill-label">Link Downloader</span>
+            <span class="pill-label">Downloader</span>
           </a>
           <a href="/converter" class="mode-tab" role="tab">
             <span class="icon">&#x21C4;</span>
-            <span class="pill-label">File Converter</span>
+            <span class="pill-label">Converters</span>
           </a>
         </nav>
 
         <!-- Header Actions -->
         <div class="header-actions">
           <button type="button" class="ghost-btn" id="open-about-modal">About</button>
-          <button type="button" class="ghost-btn" id="open-platforms-modal">Supported Platforms</button>
+          <button type="button" class="ghost-btn" id="open-platforms-modal"><span class="desktop-only">Supported </span>Platforms</button>
         </div>
       </div>
     </header>
@@ -43,23 +47,28 @@
     <!-- Page Main Content -->
     <main class="page-container">
       
-      <!-- Hero Section -->
+      <!-- Home Hero Section -->
       <section class="hero-section">
         <div class="hero-badge">
           <span class="hero-badge-dot"></span>
           One Link. Any File.
         </div>
         <h1 class="hero-title">
-          Download anything from<br>
-          <span class="hero-title-grad">any link, instantly</span>
+          Universal Downloader &amp;<br>
+          <span class="hero-title-grad">File Converter Suite</span>
         </h1>
         <p class="hero-subtitle">
-          Paste a link from Instagram, YouTube, TikTok, Reddit, X, LinkedIn, Facebook, or any direct URL — get your file in seconds.
+          Download high-quality media from any social link, or convert PDFs, documents, videos, and images with zero cloud retention and direct email delivery.
         </p>
+        <div class="hero-actions">
+          <a href="#quick-downloader" class="btn-primary hero-cta-btn">&#x26A1; Quick Downloader</a>
+          <a href="#converter-suite" class="btn-secondary hero-cta-btn">&#x21C4; Dedicated Converters</a>
+        </div>
       </section>
 
-      <!-- Glassmorphic Working Card -->
-      <div class="glass-card">
+      <!-- 1. Quick Downloader Working Card -->
+      <div class="glass-card" id="quick-downloader">
+        <div class="section-card-badge">&#x1F517; QUICK LINK DOWNLOADER</div>
 
         <!-- 1. Input View -->
         <div id="input-view">
@@ -92,164 +101,264 @@
 
           <!-- Platform Chips -->
           <div class="platform-section">
-            <div class="platform-title">Quick Supported Platforms</div>
+            <div class="platform-title">Supported Platforms</div>
             <div class="platform-chips-row">
               <div class="platform-chip ig"><span>&#x1F4F8;</span> Instagram</div>
               <div class="platform-chip yt"><span>&#x25B6;&#xFE0F;</span> YouTube</div>
               <div class="platform-chip tt"><span>&#x1F3B5;</span> TikTok</div>
               <div class="platform-chip rd"><span>&#x1F916;</span> Reddit</div>
               <div class="platform-chip li"><span>&#x1F4BC;</span> LinkedIn</div>
-              <div class="platform-chip"><span>&#x1D54F;</span> X (Twitter)</div>
-              <div class="platform-chip fb"><span>&#x1F464;</span> Facebook</div>
+              <div class="platform-chip tw"><span>&#x1D54F;</span> X (Twitter)</div>
+              <div class="platform-chip fb"><span>&#x1F465;</span> Facebook</div>
               <div class="platform-chip"><span>&#x1F310;</span> Direct Files</div>
             </div>
           </div>
         </div>
 
-        <!-- 2. Loading View -->
-        <div id="loading-view" class="loading-view hidden">
-          <div class="spinner-ring"></div>
-          <h3 class="loading-title">Analyzing Link...</h3>
-          <p class="loading-subtitle">Extracting content structure and media streams</p>
-          <div class="analysis-steps">
-            <div class="step-item active" id="step-platform">
-              <span class="step-dot"></span> Platform
-            </div>
-            <div class="step-item" id="step-content">
-              <span class="step-dot"></span> Content Type
-            </div>
-            <div class="step-item" id="step-media">
-              <span class="step-dot"></span> Media Streams
-            </div>
+        <!-- 2. Loading / Analyzing State -->
+        <div id="loading-view" class="hidden">
+          <div class="loader-container">
+            <div class="spinner"></div>
+            <h3 class="loader-title">Analyzing Media Source...</h3>
+            <p class="loader-sub">Extracting direct streams, metadata, and format choices.</p>
           </div>
         </div>
 
-        <!-- 3. Options View -->
-        <div id="options-view" class="hidden">
+        <!-- 3. Result / Options State -->
+        <div id="result-view" class="hidden">
           <div class="result-header">
             <div>
               <div class="result-meta-top">
-                <span class="badge-platform" id="res-platform">Platform</span>
-                <span class="badge-type" id="res-type">Media</span>
+                <span class="badge-platform" id="meta-platform">Instagram</span>
+                <span class="badge-type" id="meta-type">Reel</span>
               </div>
-              <h2 class="result-title" id="res-title">Content Detected</h2>
-              <p class="result-summary" id="res-summary">Ready to package.</p>
+              <h2 class="result-title" id="meta-title">Extracted Media</h2>
+              <p class="result-summary" id="meta-summary">Ready to download or convert.</p>
             </div>
-            <button type="button" class="btn-secondary" id="btn-reset-options">&#x2190; Back</button>
+            <button type="button" class="btn-secondary" id="btn-reset-options">&#x2190; New Link</button>
           </div>
 
-          <!-- Preview Area -->
-          <div class="preview-container" id="preview-container"></div>
+          <!-- Media Preview Card -->
+          <div class="media-preview-container" id="media-preview-container">
+            <img id="media-thumbnail" class="media-thumb" src="" alt="Media thumbnail" style="display:none">
+            <div class="media-info-text">
+              <div class="media-author" id="meta-author"></div>
+              <div class="media-description" id="meta-desc"></div>
+            </div>
+          </div>
 
-          <!-- Format Selection -->
-          <div class="format-section-title">Select Output Package Format</div>
-          <div class="format-cards-grid" id="format-cards-grid"></div>
-
-          <!-- Custom Settings -->
+          <!-- Settings Row -->
           <div class="settings-row">
-            <div class="setting-group" id="quality-setting-group" style="display:none">
-              <label class="setting-label" for="quality-select">Video Quality</label>
-              <select id="quality-select" class="styled-select"></select>
+            <div class="form-group">
+              <label for="format-select" class="form-label">&#x1F3AC; Target Format</label>
+              <select id="format-select" class="form-select"></select>
             </div>
-            <div class="setting-group">
-              <label class="setting-label" for="custom-filename-input">Custom Filename (Optional)</label>
-              <input type="text" id="custom-filename-input" class="styled-input" placeholder="e.g. vacation_highlight">
-            </div>
-            <div class="setting-group" id="caption-setting-group" style="display:none;justify-content:flex-end">
-              <label class="caption-toggle-box">
-                <input type="checkbox" id="include-caption-checkbox">
-                <span class="caption-label-text">Include caption text file</span>
-              </label>
+            <div class="form-group" id="quality-group">
+              <label for="quality-select" class="form-label">&#x2728; Quality</label>
+              <select id="quality-select" class="form-select">
+                <option value="best">Highest Available (Original)</option>
+                <option value="1080p">1080p Full HD</option>
+                <option value="720p">720p HD</option>
+                <option value="480p">480p Standard</option>
+              </select>
             </div>
           </div>
 
-          <!-- Download Action -->
-          <div style="text-align:center;margin-top:20px">
-            <button type="button" class="btn-primary" id="btn-start-download" style="min-width:240px;font-size:16px;padding:14px 32px">
-              &#x2193; Download File Now
+          <!-- Download Action Button -->
+          <div class="download-action-bar">
+            <button type="button" class="btn-primary btn-large" id="btn-start-download">
+              Generate &amp; Download File &#x2193;
             </button>
           </div>
         </div>
 
-        <!-- 4. Downloading / Packaging View -->
-        <div id="downloading-view" class="loading-view hidden">
-          <div class="spinner-ring"></div>
-          <h3 class="loading-title">Packaging Your File...</h3>
-          <p class="loading-subtitle">Merging streams and building your high-speed package</p>
+        <!-- 4. Generation / Download Progress View -->
+        <div id="downloading-view" class="hidden">
+          <div class="loader-container">
+            <div class="spinner"></div>
+            <h3 class="loader-title" id="progress-title">Generating Your File...</h3>
+            <p class="loader-sub" id="progress-sub">Processing and packaging media on the server.</p>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar" id="download-progress-bar"></div>
+            </div>
+            <div class="progress-percent" id="download-progress-percent">0%</div>
+          </div>
         </div>
 
-        <!-- 5. Success View -->
-        <div id="success-view" class="success-view hidden">
-          <div class="success-badge-icon">&#x2713;</div>
-          <h2 class="success-title">Your File is Ready!</h2>
-          <p class="success-subtitle">Download your file directly or send it straight to your email inbox.</p>
+        <!-- 5. Success / Ready View -->
+        <div id="success-view" class="hidden">
+          <div class="success-card">
+            <div class="success-icon">&#x2705;</div>
+            <h3 class="success-title">Your File is Ready!</h3>
+            <p class="success-filename" id="ready-filename">media-file.mp4</p>
+            
+            <div class="success-actions">
+              <a href="#" class="btn-primary btn-large" id="direct-download-link" download>
+                &#x2193; Download File Now
+              </a>
+              <button type="button" class="btn-secondary" id="email-toggle-btn">
+                &#x2709;&#xFE0F; Send to Email
+              </button>
+            </div>
 
-          <div class="file-info-box">
-            <div class="file-info-row">
-              <span class="info-key">Filename</span>
-              <span class="info-value" id="success-filename">file</span>
-            </div>
-            <div class="file-info-row">
-              <span class="info-key">File Size</span>
-              <span class="info-value" id="success-filesize">0 MB</span>
-            </div>
-            <div class="file-info-row">
-              <span class="info-key">Format</span>
-              <span class="info-value" id="success-format">FILE</span>
-            </div>
-          </div>
-
-          <div class="success-actions">
-            <a href="#" class="btn-primary" id="direct-download-btn" style="padding:14px 28px;font-size:15px">
-              &#x2193; Direct Download
-            </a>
-            <button type="button" class="btn-secondary" id="btn-reset-success">
-              Download Another Link
-            </button>
-          </div>
-
-          <!-- Email Delivery Widget -->
-          <div class="email-delivery-widget" id="email-widget">
-            <div class="email-toggle-button" id="email-toggle-btn">
-              <span class="email-toggle-title">
-                <span>&#x2709;&#xFE0F;</span> Send this file to your email
-              </span>
-              <span class="email-toggle-arrow">&#x25BC;</span>
-            </div>
-            <div class="email-form-panel">
-              <div class="email-input-row">
-                <input
-                  type="email"
-                  class="email-input-field"
-                  id="email-input"
-                  placeholder="Enter your email address..."
-                  autocomplete="email"
-                >
-                <button type="button" class="email-send-button" id="email-send-btn">
-                  Send
+            <!-- Email Drawer -->
+            <div class="email-drawer" id="email-widget">
+              <div class="email-input-group">
+                <input type="email" id="email-recipient" class="email-input" placeholder="Enter your email address...">
+                <button type="button" class="btn-primary" id="email-send-btn">
+                  Attach &amp; Send
                 </button>
               </div>
-              <div class="email-status-message" id="email-status-message"></div>
+              <div class="email-feedback" id="email-feedback"></div>
+            </div>
+
+            <div class="start-over-bar">
+              <button type="button" class="link-btn" id="btn-reset-success">&#x21BA; Download Another File</button>
             </div>
           </div>
         </div>
 
         <!-- 6. Error View -->
-        <div id="error-view" class="error-view hidden">
-          <div class="error-badge-icon">&#x26A0;</div>
-          <h2 class="error-title">Could Not Process Link</h2>
-          <p class="error-message" id="error-message">
-            Unable to access or extract media from this URL. Please verify the link is public and accessible.
-          </p>
-          <button type="button" class="btn-primary" id="btn-reset-error" style="min-width:180px">
-            Try Another Link
-          </button>
+        <div id="error-view" class="hidden">
+          <div class="error-card">
+            <div class="error-icon">&#x26A0;&#xFE0F;</div>
+            <h3 class="error-title">Extraction Error</h3>
+            <p class="error-message" id="error-message">Unable to extract media from this URL.</p>
+            <button type="button" class="btn-primary" id="btn-reset-error">&#x2190; Try Another Link</button>
+          </div>
         </div>
 
       </div>
+
+      <!-- 2. Dedicated Converter Suite Section -->
+      <section class="section-suite" id="converter-suite">
+        <div class="section-header">
+          <div class="section-badge">&#x21C4; DEDICATED CONVERTERS</div>
+          <h2 class="section-title">Separate Pages for Every Converter</h2>
+          <p class="section-subtitle">
+            Click any converter below to jump to its dedicated high-speed workspace with drag-and-drop support, custom format settings, and direct email delivery.
+          </p>
+        </div>
+
+        <div class="suite-grid">
+          
+          <!-- Tool 1: PDF to Images -->
+          <a href="/converter/pdf-to-images" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F4C4;</span>
+              <span class="suite-card-badge">PDF &#x2192; JPG/PNG</span>
+            </div>
+            <h3 class="suite-card-title">PDF to Images</h3>
+            <p class="suite-card-desc">Extract all pages of any PDF into high-resolution JPG or PNG images inside a ZIP archive.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+          <!-- Tool 2: Images to PDF -->
+          <a href="/converter/images-to-pdf" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F5BC;&#xFE0F;</span>
+              <span class="suite-card-badge">Images &#x2192; PDF</span>
+            </div>
+            <h3 class="suite-card-title">Images to PDF</h3>
+            <p class="suite-card-desc">Merge multiple JPG, PNG, or WebP images into a single crisp, multi-page PDF document.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+          <!-- Tool 3: Video to Audio -->
+          <a href="/converter/video-to-audio" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F3A7;</span>
+              <span class="suite-card-badge">Video &#x2192; MP3/M4A</span>
+            </div>
+            <h3 class="suite-card-title">Video to Audio</h3>
+            <p class="suite-card-desc">Extract 192kbps crystal-clear MP3 or lossless AAC/M4A audio from any MP4, MKV, WebM, or MOV video.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+          <!-- Tool 4: Word (DOCX) to PDF -->
+          <a href="/converter/docx-to-pdf" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F4DD;</span>
+              <span class="suite-card-badge">DOCX &#x2192; PDF</span>
+            </div>
+            <h3 class="suite-card-title">Word (DOCX) to PDF</h3>
+            <p class="suite-card-desc">Convert Microsoft Word documents (.docx) to PDF with preserved layout, tables, and typography.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+          <!-- Tool 5: PDF to Word (DOCX) -->
+          <a href="/converter/pdf-to-docx" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F4CB;</span>
+              <span class="suite-card-badge">PDF &#x2192; DOCX</span>
+            </div>
+            <h3 class="suite-card-title">PDF to Word (DOCX)</h3>
+            <p class="suite-card-desc">Extract text, tables, and layout from PDF files into an editable Microsoft Word document.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+          <!-- Tool 6: Video Transcoder -->
+          <a href="/converter/video-converter" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F3AC;</span>
+              <span class="suite-card-badge">Video &#x2192; MP4/MKV</span>
+            </div>
+            <h3 class="suite-card-title">Video Transcoder</h3>
+            <p class="suite-card-desc">Transcode and compress video files across MP4, MKV, and WebM container formats smoothly.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+          <!-- Tool 7: Image Converter -->
+          <a href="/converter/image-converter" class="suite-card">
+            <div class="suite-card-top">
+              <span class="suite-card-icon">&#x1F3A8;</span>
+              <span class="suite-card-badge">PNG/JPG &#x2192; WebP</span>
+            </div>
+            <h3 class="suite-card-title">Image Converter</h3>
+            <p class="suite-card-desc">Convert and compress images between WebP (ultra-compressed), lossless PNG, and standard JPG.</p>
+            <div class="suite-card-footer">
+              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+            </div>
+          </a>
+
+        </div>
+      </section>
+
+      <!-- 3. Key Features Section -->
+      <section class="section-features">
+        <div class="features-grid">
+          <div class="feature-box">
+            <div class="feature-icon">&#x26A1;</div>
+            <h4 class="feature-heading">Local In-Memory Speed</h4>
+            <p class="feature-text">High-speed server-side conversion engine. No bloated third-party queues or artificial wait times.</p>
+          </div>
+          <div class="feature-box">
+            <div class="feature-icon">&#x1F512;</div>
+            <h4 class="feature-heading">Zero Cloud Retention</h4>
+            <p class="feature-text">Files are processed in sandboxed sessions and automatically purged within 30 minutes. 100% private.</p>
+          </div>
+          <div class="feature-box">
+            <div class="feature-icon">&#x2709;&#xFE0F;</div>
+            <h4 class="feature-heading">Direct Email Attachment</h4>
+            <p class="feature-text">Optionally deliver your files directly attached to your inbox so you never have to wait around.</p>
+          </div>
+        </div>
+      </section>
+
     </main>
 
-    <!-- Modals -->
     <!-- About Modal -->
     <div class="modal-backdrop" id="about-modal">
       <div class="modal-dialog">
@@ -258,17 +367,17 @@
           <button type="button" class="modal-close-btn" id="close-about-modal">&times;</button>
         </div>
         <div class="modal-body">
-          <h4>One Link. Any File.</h4>
+          <h4>Universal Media Downloader &amp; File Converter</h4>
           <p>
-            LinkForge is a high-speed universal media packaging engine and local file converter designed for creators, researchers, and professionals.
+            LinkForge is a unified suite designed to download media from social links and convert documents, media, and images locally with zero cloud retention.
           </p>
-          <h4>Privacy & Security</h4>
+          <h4>Privacy Guaranteed</h4>
           <p>
-            All file processing happens securely with zero permanent data retention. Temporary downloads expire automatically within 30 minutes.
+            Files are held only long enough for conversion and download. Automated background workers purge all processed files after 30 minutes.
           </p>
           <h4>Direct Email Delivery</h4>
           <p>
-            You can send your processed files directly as attachments to any email address with instant delivery.
+            Send any downloaded or converted file straight to your email as a real attachment.
           </p>
         </div>
       </div>
@@ -282,7 +391,7 @@
           <button type="button" class="modal-close-btn" id="close-platforms-modal">&times;</button>
         </div>
         <div class="modal-body">
-          <h4>Supported Sources</h4>
+          <h4>Supported Social &amp; Video Sources</h4>
           <ul>
             <li><strong>Instagram:</strong> Posts, Reels, Carousels, and Audio</li>
             <li><strong>YouTube:</strong> Standard Videos, Shorts, Audio Extraction</li>
@@ -299,10 +408,11 @@
 
     <!-- Footer -->
     <footer class="site-footer">
-      <p>&copy; 2026 LinkForge. Universal Link Downloader & File Converter Engine.</p>
+      <p>&copy; 2026 LinkForge. Universal Link Downloader &amp; File Converter Suite.</p>
       <div class="footer-links">
-        <a href="/">Link Downloader</a>
-        <a href="/converter">File Converter</a>
+        <a href="/">Home</a>
+        <a href="/downloader">Link Downloader</a>
+        <a href="/converter">File Converters</a>
       </div>
     </footer>
 
