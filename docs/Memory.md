@@ -285,10 +285,10 @@ pytest -v
 # 9. Vercel Serverless Architecture & Deployment Gotchas
 
 ### Serverless Function Configuration
-- **Entrypoints:** Root `app.py` and `api/index.py` both serve the WSGI application object `app`.
-- **Path Routing:** `vercel.json` defines rewrites `[{"source": "/(.*)", "destination": "/app.py"}]` ensuring dynamic sub-paths (`/downloader`, `/converter`, `/api/analyze`, `/api/generate`, `/download/<file_id>`) route directly to Flask.
+- **Entrypoint:** `api/index.py` is the official WSGI application entrypoint for Vercel Serverless Functions.
+- **Path Routing & Middleware:** `vercel.json` rewrites `[{"source": "/(.*)", "destination": "/api/index.py"}]`. Inside `api/index.py`, `VercelPathMiddleware` checks `HTTP_X_MATCHED_PATH` and restores the intended client route (`/downloader`, `/converter`, `/api/analyze`, etc.) to `PATH_INFO`.
 - **Permissive Slashing:** `app.url_map.strict_slashes = False` is set on Flask application factory to handle all URLs with or without trailing slashes.
-- **Template Bundling:** `vercel.json` configures `"functions": { "api/index.py": { "includeFiles": "{templates/**,static/**}", "maxDuration": 30 }, "app.py": { "includeFiles": "{templates/**,static/**}", "maxDuration": 30 } }` to ensure templates are bundled in serverless package.
+- **Template Bundling:** `vercel.json` configures `"functions": { "api/index.py": { "includeFiles": "templates/**", "maxDuration": 30 } }` to ensure templates are bundled in serverless package.
 - **Static Assets via CDN:** Static assets are mirrored into `public/static/` so Vercel Edge CDN serves CSS and JavaScript directly without cold starts.
 - **Serverless Storage:** Lambda filesystems are read-only except `/tmp`. `config.py` detects serverless runtimes (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `LAMBDA_TASK_ROOT`, etc.) and automatically routes `TEMP_STORAGE_DIR` and `GENERATED_STORAGE_DIR` to `/tmp/linkforge/...` with resilient fallback handling.
 - **Disk Recovery across Ephemeral Containers:** `JobService` writes `meta.json` inside generated folders and implements a two-tier disk scan so subsequent lambda invocations can serve download files even if in-memory state is cleared.

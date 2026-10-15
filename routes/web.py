@@ -144,3 +144,14 @@ def converter_tool(tool_slug):
         abort(404)
     other_tools = [t for s, t in CONVERTER_TOOLS.items() if s != tool_slug]
     return render_template("tool_converter.html", tool=tool, other_tools=other_tools)
+
+
+@web_bp.route("/favicon.ico", methods=["GET"])
+def favicon():
+    return ("", 204)
+
+
+@web_bp.route("/sw.js", methods=["GET"])
+def service_worker():
+    return ("", 204)
+
