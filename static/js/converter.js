@@ -1,401 +1,347 @@
 /**
- * LinkForge - File Converter Hub Controller (Frontend)
- * Supports PDF to Images, Images to PDF, Video to Audio, DOCX to PDF, and more.
+ * LinkForge - File Converter Hub Controller
+ * Handles local file upload, tool selection, format configuration, and email delivery.
  */
 
-const Converter = {
+const ConverterApp = {
     activeTool: null,
     selectedFiles: [],
-    currentBlobUrl: null,
+    currentFileId: null,
 
-    tools: {
-        pdf_to_images: {
+    tools: [
+        {
             id: "pdf_to_images",
             title: "PDF to Images",
             category: "docs",
-            icon: "📄",
-            badge: "PDF → JPG/PNG (Any Size)",
-            description: "Extract pages of any PDF into high-resolution JPG or PNG images directly in your browser (unlimited file size).",
+            icon: "&#x1F4C4;",
+            badge: "PDF &#x2192; JPG/PNG",
+            desc: "Extract pages of any PDF into high-res JPG or PNG images inside a ZIP archive.",
             accept: ".pdf",
             multiple: false,
-            outputFormats: [
-                { value: "jpg", label: "JPG Images (.jpg)" },
-                { value: "png", label: "PNG Images (.png)" }
+            formats: [
+                { value: "jpg", label: "JPG Images in ZIP (.zip)" },
+                { value: "png", label: "PNG Images in ZIP (.zip)" }
             ]
         },
-        images_to_pdf: {
+        {
             id: "images_to_pdf",
             title: "Images to PDF",
             category: "docs",
-            icon: "🖼️",
-            badge: "Images → PDF",
-            description: "Combine multiple JPG, PNG, or WebP images into a single multi-page PDF document.",
+            icon: "&#x1F5BC;&#xFE0F;",
+            badge: "Images &#x2192; PDF",
+            desc: "Combine multiple JPG, PNG, or WebP images into a single multi-page PDF document.",
             accept: ".jpg,.jpeg,.png,.webp,.bmp",
             multiple: true,
-            outputFormats: [
+            formats: [
                 { value: "pdf", label: "PDF Document (.pdf)" }
             ]
         },
-        video_to_audio: {
+        {
             id: "video_to_audio",
             title: "Video to Audio",
             category: "media",
-            icon: "🎬",
-            badge: "Video → MP3/M4A",
-            description: "Extract crystal-clear audio from any MP4, MKV, WebM, MOV, or AVI video.",
+            icon: "&#x1F3A7;",
+            badge: "Video &#x2192; MP3/M4A",
+            desc: "Extract pristine audio track from any MP4, MKV, WebM, MOV, or AVI video.",
             accept: ".mp4,.mkv,.webm,.mov,.avi,.flv",
             multiple: false,
-            outputFormats: [
+            formats: [
                 { value: "mp3", label: "MP3 Audio (192 kbps)" },
                 { value: "m4a", label: "M4A Audio (AAC)" }
             ]
         },
-        docx_to_pdf: {
+        {
             id: "docx_to_pdf",
             title: "Word (DOCX) to PDF",
             category: "docs",
-            icon: "📝",
-            badge: "DOCX → PDF",
-            description: "Convert Word documents (.docx) to PDF with crisp layout and typography.",
+            icon: "&#x1F4DD;",
+            badge: "DOCX &#x2192; PDF",
+            desc: "Convert Word documents (.docx) to PDF with crisp formatting and typography.",
             accept: ".docx,.doc",
             multiple: false,
-            outputFormats: [
+            formats: [
                 { value: "pdf", label: "PDF Document (.pdf)" }
             ]
         },
-        pdf_to_docx: {
+        {
             id: "pdf_to_docx",
             title: "PDF to Word (DOCX)",
             category: "docs",
-            icon: "🗜️",
-            badge: "PDF → DOCX",
-            description: "Extract text and embedded images from PDF into an editable Word document.",
+            icon: "&#x1F4CB;",
+            badge: "PDF &#x2192; DOCX",
+            desc: "Extract text and layout from PDF into an editable Microsoft Word document.",
             accept: ".pdf",
             multiple: false,
-            outputFormats: [
+            formats: [
                 { value: "docx", label: "Word Document (.docx)" }
             ]
         },
-        video_converter: {
+        {
             id: "video_converter",
             title: "Video Converter",
             category: "media",
-            icon: "🎞️",
-            badge: "MP4 ↔ MKV ↔ WebM",
-            description: "Convert video files between MP4, MKV, and WebM multimedia containers.",
-            accept: ".mp4,.mkv,.webm,.mov,.avi",
+            icon: "&#x1F3AC;",
+            badge: "Video &#x2192; MP4/MKV",
+            desc: "Transcode video files across MP4, MKV, and WebM container formats.",
+            accept: ".mp4,.mkv,.webm,.mov,.avi,.flv",
             multiple: false,
-            outputFormats: [
-                { value: "mp4", label: "MP4 Video (.mp4)" },
-                { value: "mkv", label: "MKV Video (.mkv)" },
-                { value: "webm", label: "WebM Video (.webm)" }
+            formats: [
+                { value: "mp4", label: "MP4 Video (H.264)" },
+                { value: "mkv", label: "MKV Video (Lossless)" },
+                { value: "webm", label: "WebM Video" }
             ]
         },
-        image_converter: {
+        {
             id: "image_converter",
             title: "Image Converter",
             category: "images",
-            icon: "🎨",
-            badge: "JPG ↔ PNG ↔ WebP",
-            description: "Convert image files between JPG, PNG, and WebP format.",
-            accept: ".jpg,.jpeg,.png,.webp,.bmp",
+            icon: "&#x1F3A8;",
+            badge: "PNG/JPG &#x2192; WebP",
+            desc: "Convert and optimize images between PNG, JPG, and lightweight WebP formats.",
+            accept: ".png,.jpg,.jpeg,.webp,.bmp",
             multiple: false,
-            outputFormats: [
-                { value: "png", label: "PNG (.png)" },
-                { value: "jpg", label: "JPG (.jpg)" },
-                { value: "webp", label: "WebP (.webp)" }
+            formats: [
+                { value: "webp", label: "WebP (Ultra Compressed)" },
+                { value: "png", label: "PNG (Lossless)" },
+                { value: "jpg", label: "JPG (Standard)" }
             ]
         }
-    },
+    ],
 
     init() {
-        this.bindModeTabs();
-        this.renderToolCards();
-        this.bindWorkspaceEvents();
-
-        // Initialize PDF.js worker if available
-        if (window.pdfjsLib) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-        }
+        this.renderToolGrid("all");
+        this.selectTool(this.tools[0].id);
+        this.bindEvents();
     },
 
-    bindModeTabs() {
-        const tabDownloader = document.getElementById("tab-downloader");
-        const tabConverter = document.getElementById("tab-converter");
-        const viewDownloader = document.getElementById("downloader-view");
-        const viewConverter = document.getElementById("converter-view");
-
-        if (tabDownloader && tabConverter) {
-            tabDownloader.addEventListener("click", () => {
-                tabDownloader.classList.add("active");
-                tabConverter.classList.remove("active");
-                if (viewDownloader) viewDownloader.style.display = "block";
-                if (viewConverter) viewConverter.style.display = "none";
+    bindEvents() {
+        // Category filters
+        document.querySelectorAll(".category-tab").forEach(tab => {
+            tab.addEventListener("click", () => {
+                document.querySelectorAll(".category-tab").forEach(t => t.classList.remove("active"));
+                tab.classList.add("active");
+                const cat = tab.getAttribute("data-category") || "all";
+                this.renderToolGrid(cat);
             });
+        });
 
-            tabConverter.addEventListener("click", () => {
-                tabConverter.classList.add("active");
-                tabDownloader.classList.remove("active");
-                if (viewDownloader) viewDownloader.style.display = "none";
-                if (viewConverter) viewConverter.style.display = "block";
+        // Dropzone interactions
+        const dropzone = document.getElementById("converter-dropzone");
+        const fileInput = document.getElementById("converter-file-input");
+        const browseBtn = document.getElementById("converter-browse-btn");
+
+        if (browseBtn && fileInput) {
+            browseBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                fileInput.click();
             });
         }
+
+        if (dropzone && fileInput) {
+            dropzone.addEventListener("click", () => fileInput.click());
+
+            dropzone.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropzone.classList.add("dragover");
+            });
+
+            dropzone.addEventListener("dragleave", () => {
+                dropzone.classList.remove("dragover");
+            });
+
+            dropzone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                dropzone.classList.remove("dragover");
+                if (e.dataTransfer && e.dataTransfer.files) {
+                    this.handleFiles(Array.from(e.dataTransfer.files));
+                }
+            });
+
+            fileInput.addEventListener("change", (e) => {
+                if (e.target.files) {
+                    this.handleFiles(Array.from(e.target.files));
+                }
+            });
+        }
+
+        // Convert action button
+        const btnConvert = document.getElementById("btn-start-convert");
+        if (btnConvert) {
+            btnConvert.addEventListener("click", () => this.startConversion());
+        }
+
+        // Reset buttons
+        const btnResetConfig = document.getElementById("btn-reset-converter-config");
+        const btnResetSuccess = document.getElementById("btn-reset-converter-success");
+        const btnResetError = document.getElementById("btn-reset-converter-error");
+
+        if (btnResetConfig) btnResetConfig.addEventListener("click", () => this.resetFiles());
+        if (btnResetSuccess) btnResetSuccess.addEventListener("click", () => this.resetFiles());
+        if (btnResetError) btnResetError.addEventListener("click", () => this.showView("upload-view"));
+
+        // Email delivery toggle
+        const emailToggle = document.getElementById("conv-email-toggle-btn");
+        const emailWidget = document.getElementById("conv-email-widget");
+        const emailSendBtn = document.getElementById("conv-email-send-btn");
+
+        if (emailToggle && emailWidget) {
+            emailToggle.addEventListener("click", () => {
+                emailWidget.classList.toggle("open");
+            });
+        }
+
+        if (emailSendBtn) {
+            emailSendBtn.addEventListener("click", () => this.sendEmail());
+        }
+
+        // Modals
+        this.initModals();
     },
 
-    renderToolCards(filterCategory = "all") {
+    renderToolGrid(category) {
         const grid = document.getElementById("converter-tools-grid");
         if (!grid) return;
 
         grid.innerHTML = "";
+        const filtered = category === "all" ? this.tools : this.tools.filter(t => t.category === category);
 
-        Object.values(this.tools).forEach(tool => {
-            if (filterCategory !== "all" && tool.category !== filterCategory) return;
-
+        filtered.forEach(tool => {
             const card = document.createElement("div");
-            card.className = "tool-card";
+            card.className = `tool-card ${this.activeTool && this.activeTool.id === tool.id ? "active" : ""}`;
+            card.setAttribute("data-tool-id", tool.id);
             card.innerHTML = `
-                <div class="tool-card-header">
-                    <span class="tool-card-icon">${tool.icon}</span>
-                    <span class="tool-card-badge">${tool.badge}</span>
-                </div>
-                <h3 class="tool-card-title">${tool.title}</h3>
-                <p class="tool-card-desc">${tool.description}</p>
-                <button type="button" class="tool-card-btn" data-tool-id="${tool.id}">
-                    Select Tool →
-                </button>
+                <div class="tool-card-icon-box">${tool.icon}</div>
+                <div class="tool-card-title">${tool.title}</div>
+                <div class="tool-card-badge">${tool.badge}</div>
+                <div class="tool-card-desc">${tool.desc}</div>
             `;
 
-            card.querySelector(".tool-card-btn").addEventListener("click", () => {
+            card.addEventListener("click", () => {
                 this.selectTool(tool.id);
             });
 
             grid.appendChild(card);
         });
-
-        // Filter pills
-        const filterBtns = document.querySelectorAll(".tool-filter-btn");
-        filterBtns.forEach(btn => {
-            btn.onclick = () => {
-                filterBtns.forEach(b => b.classList.remove("active"));
-                btn.classList.add("active");
-                this.renderToolCards(btn.dataset.category);
-            };
-        });
     },
 
     selectTool(toolId) {
-        const tool = this.tools[toolId];
+        const tool = this.tools.find(t => t.id === toolId);
         if (!tool) return;
 
         this.activeTool = tool;
-        this.selectedFiles = [];
 
-        // Scroll to workspace smoothly
-        const workspace = document.getElementById("converter-workspace");
-        if (workspace) {
-            workspace.style.display = "block";
-            workspace.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-
-        // Hide tools catalog or collapse
-        document.getElementById("active-tool-icon").textContent = tool.icon;
-        document.getElementById("active-tool-title").textContent = tool.title;
-        document.getElementById("active-tool-desc").textContent = tool.description;
-
-        const fileInput = document.getElementById("converter-file-input");
-        fileInput.value = "";
-        fileInput.accept = tool.accept;
-        fileInput.multiple = tool.multiple;
-
-        // Populate output format selector
-        const formatSelect = document.getElementById("converter-format-select");
-        formatSelect.innerHTML = "";
-        tool.outputFormats.forEach(fmt => {
-            const opt = document.createElement("option");
-            opt.value = fmt.value;
-            opt.textContent = fmt.label;
-            formatSelect.appendChild(opt);
+        // Highlight in grid
+        document.querySelectorAll(".tool-card").forEach(c => {
+            c.classList.toggle("active", c.getAttribute("data-tool-id") === toolId);
         });
 
-        // Reset filename input
-        const nameInput = document.getElementById("converter-filename-input");
-        if (nameInput) nameInput.value = "";
-
-        this.renderSelectedFiles();
-        this.hideWorkspaceSubsections();
-        document.getElementById("converter-upload-form").style.display = "block";
-    },
-
-    bindWorkspaceEvents() {
-        const dropZone = document.getElementById("converter-dropzone");
+        // Update Dropzone hints and accepted extensions
         const fileInput = document.getElementById("converter-file-input");
-        const browseBtn = document.getElementById("converter-browse-btn");
-        const convertBtn = document.getElementById("btn-do-convert");
-        const backBtn = document.getElementById("btn-back-to-tools");
-        const resetSuccessBtn = document.getElementById("btn-reset-converter-success");
-        const resetErrorBtn = document.getElementById("btn-reset-converter-error");
-
-        if (browseBtn && fileInput) {
-            browseBtn.onclick = () => fileInput.click();
-        }
+        const toolBadge = document.getElementById("active-tool-badge");
+        const dropzoneTitle = document.getElementById("active-dropzone-title");
+        const dropzoneSub = document.getElementById("active-dropzone-sub");
 
         if (fileInput) {
-            fileInput.onchange = (e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                    this.addFiles(Array.from(e.target.files));
-                }
-            };
+            fileInput.accept = tool.accept;
+            fileInput.multiple = !!tool.multiple;
         }
 
-        if (dropZone) {
-            ["dragenter", "dragover"].forEach(eventName => {
-                dropZone.addEventListener(eventName, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    dropZone.classList.add("dragover");
-                });
-            });
+        if (toolBadge) toolBadge.innerHTML = `${tool.icon} ${tool.title}`;
+        if (dropzoneTitle) dropzoneTitle.textContent = `Upload files for ${tool.title}`;
+        if (dropzoneSub) dropzoneSub.textContent = `Supported formats: ${tool.accept.replace(/,/g, ", ")}`;
 
-            ["dragleave", "drop"].forEach(eventName => {
-                dropZone.addEventListener(eventName, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    dropZone.classList.remove("dragover");
-                });
-            });
-
-            dropZone.addEventListener("drop", (e) => {
-                const dt = e.dataTransfer;
-                if (dt && dt.files && dt.files.length > 0) {
-                    this.addFiles(Array.from(dt.files));
-                }
+        // Populate format select
+        const formatSelect = document.getElementById("converter-format-select");
+        if (formatSelect) {
+            formatSelect.innerHTML = "";
+            tool.formats.forEach(f => {
+                const opt = document.createElement("option");
+                opt.value = f.value;
+                opt.textContent = f.label;
+                formatSelect.appendChild(opt);
             });
         }
 
-        if (convertBtn) {
-            convertBtn.onclick = () => this.submitConversion();
-        }
-
-        if (backBtn) {
-            backBtn.onclick = () => {
-                const workspace = document.getElementById("converter-workspace");
-                if (workspace) workspace.style.display = "none";
-                const grid = document.getElementById("converter-tools-grid");
-                if (grid) grid.scrollIntoView({ behavior: "smooth" });
-            };
-        }
-
-        if (resetSuccessBtn) {
-            resetSuccessBtn.onclick = () => this.resetWorkspace();
-        }
-
-        if (resetErrorBtn) {
-            resetErrorBtn.onclick = () => this.resetWorkspace();
+        // If files already selected, re-render
+        if (this.selectedFiles.length > 0) {
+            this.showView("config-view");
         }
     },
 
-    addFiles(files) {
-        if (!this.activeTool) return;
+    handleFiles(files) {
+        if (!files || files.length === 0) return;
 
-        if (!this.activeTool.multiple) {
+        if (this.activeTool && !this.activeTool.multiple) {
             this.selectedFiles = [files[0]];
         } else {
-            // Append and deduplicate
-            files.forEach(f => {
-                if (!this.selectedFiles.some(existing => existing.name === f.name && existing.size === f.size)) {
-                    this.selectedFiles.push(f);
-                }
-            });
+            this.selectedFiles = files;
         }
 
-        this.renderSelectedFiles();
+        this.renderStagedFiles();
+        this.showView("config-view");
     },
 
-    removeFile(idx) {
-        this.selectedFiles.splice(idx, 1);
-        this.renderSelectedFiles();
-    },
-
-    renderSelectedFiles() {
-        const container = document.getElementById("converter-selected-files");
-        const convertBtn = document.getElementById("btn-do-convert");
+    renderStagedFiles() {
+        const container = document.getElementById("staged-files-list");
         if (!container) return;
 
         container.innerHTML = "";
-
-        if (this.selectedFiles.length === 0) {
-            container.style.display = "none";
-            if (convertBtn) convertBtn.disabled = true;
-            return;
-        }
-
-        container.style.display = "flex";
-        if (convertBtn) convertBtn.disabled = false;
-
-        this.selectedFiles.forEach((file, idx) => {
-            const chip = document.createElement("div");
-            chip.className = "selected-file-chip";
-
-            const sizeText = file.size < 1024 * 1024
-                ? `${(file.size / 1024).toFixed(1)} KB`
-                : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
-
-            chip.innerHTML = `
-                <span class="chip-name" title="${file.name}">${file.name}</span>
-                <span class="chip-size">${sizeText}</span>
-                <button type="button" class="chip-remove-btn" title="Remove file">✕</button>
+        this.selectedFiles.forEach((file, index) => {
+            const sizeStr = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+            const row = document.createElement("div");
+            row.className = "staged-file-card";
+            row.innerHTML = `
+                <span class="staged-file-icon">${this.activeTool ? this.activeTool.icon : "&#x1F4C1;"}</span>
+                <span class="staged-file-name">${file.name}</span>
+                <span class="staged-file-size">${sizeStr}</span>
+                <button type="button" class="staged-file-remove" title="Remove file">&times;</button>
             `;
 
-            chip.querySelector(".chip-remove-btn").onclick = (e) => {
-                e.stopPropagation();
-                this.removeFile(idx);
-            };
+            row.querySelector(".staged-file-remove").addEventListener("click", () => {
+                this.selectedFiles.splice(index, 1);
+                if (this.selectedFiles.length === 0) {
+                    this.showView("upload-view");
+                } else {
+                    this.renderStagedFiles();
+                }
+            });
 
-            container.appendChild(chip);
+            container.appendChild(row);
         });
-
-        // Auto prefill custom filename placeholder if 1 file
-        const nameInput = document.getElementById("converter-filename-input");
-        if (nameInput && this.selectedFiles.length === 1 && !nameInput.value) {
-            nameInput.placeholder = this.selectedFiles[0].name.replace(/\.[^/.]+$/, "");
-        }
     },
 
-    async submitConversion() {
+    resetFiles() {
+        this.selectedFiles = [];
+        const fileInput = document.getElementById("converter-file-input");
+        if (fileInput) fileInput.value = "";
+        this.showView("upload-view");
+    },
+
+    showView(viewName) {
+        const views = ["upload-view", "config-view", "processing-view", "success-view", "error-view"];
+        views.forEach(v => {
+            const el = document.getElementById(`converter-${v}`);
+            if (el) {
+                if (v === viewName) {
+                    el.classList.remove("hidden");
+                } else {
+                    el.classList.add("hidden");
+                }
+            }
+        });
+    },
+
+    async startConversion() {
         if (!this.activeTool || this.selectedFiles.length === 0) return;
 
+        this.showView("processing-view");
+
         const formatSelect = document.getElementById("converter-format-select");
+        const customFilenameInput = document.getElementById("converter-custom-filename");
+
         const outputFormat = formatSelect ? formatSelect.value : "";
-        const nameInput = document.getElementById("converter-filename-input");
-        const customFilename = nameInput ? nameInput.value.trim() : "";
+        const customFilename = customFilenameInput ? customFilenameInput.value.trim() : "";
 
-        // High-Capacity Client-Side Processing for PDF to Images (Bypasses Vercel 4.5 MB payload limit)
-        if (this.activeTool.id === "pdf_to_images" && window.pdfjsLib && window.JSZip) {
-            try {
-                await this.convertPdfToImagesClientSide(this.selectedFiles[0], outputFormat, customFilename);
-                return;
-            } catch (clientErr) {
-                console.warn("Client-side PDF conversion error, checking fallback:", clientErr);
-                // If file is larger than 4.5 MB, serverless upload will be rejected with 413, so report client error clearly
-                if (this.selectedFiles[0].size > 4.5 * 1024 * 1024) {
-                    this.showError(`PDF conversion failed: ${clientErr.message || "Unable to parse PDF pages."}`);
-                    return;
-                }
-                // If under 4.5 MB, fall through to server conversion as fallback
-            }
-        }
-
-        // High-Capacity Client-Side Processing for Image Converter (JPG, PNG, WebP)
-        if (this.activeTool.id === "image_converter") {
-            try {
-                await this.convertImageClientSide(this.selectedFiles[0], outputFormat, customFilename);
-                return;
-            } catch (imgErr) {
-                console.warn("Client-side image conversion error, falling back to server:", imgErr);
-            }
-        }
-
-        // Standard Server-Side Conversion (Localhost or Supported Cloud Conversions)
         const formData = new FormData();
         formData.append("conversion_type", this.activeTool.id);
         formData.append("output_format", outputFormat);
@@ -405,257 +351,159 @@ const Converter = {
             formData.append("files", file);
         });
 
-        // Show loading state
-        this.hideWorkspaceSubsections();
-        const loadingCard = document.getElementById("converter-loading-card");
-        this.setLoadingStatus("Processing Conversion...", "Converting with native high-performance engines.");
-        loadingCard.style.display = "block";
-
         try {
             const response = await fetch("/api/convert", {
                 method: "POST",
                 body: formData
             });
 
-            if (response.status === 413) {
-                this.showError("File exceeds the serverless upload limit (4.5 MB on Vercel). Please upload a smaller file or run locally for files up to 500 MB.");
-                return;
-            }
-
-            const contentType = response.headers.get("content-type") || "";
-            if (!contentType.includes("application/json")) {
-                const text = await response.text();
-                this.showError(text || `Server returned error (${response.status})`);
-                return;
-            }
-
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                const message = (data.error && data.error.message) || "Conversion failed.";
-                this.showError(message);
+                const msg = (data.error && data.error.message) || "Conversion failed. Please try again.";
+                this.showError(msg);
                 return;
             }
 
+            this.currentFileId = data.file_id;
             this.showSuccess(data);
         } catch (err) {
-            this.showError(err.message || "Network error occurred during conversion.");
-        }
-    },
-
-    async convertPdfToImagesClientSide(file, outputFormat, customFilename) {
-        this.hideWorkspaceSubsections();
-        const loadingCard = document.getElementById("converter-loading-card");
-        loadingCard.style.display = "block";
-        this.setLoadingStatus("Processing PDF In-Browser...", "Loading PDF document (zero server upload)...");
-
-        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-        }
-
-        const outFormat = (outputFormat || "jpg").toLowerCase();
-        const isPng = outFormat === "png";
-        const mimeType = isPng ? "image/png" : "image/jpeg";
-        const ext = isPng ? "png" : "jpg";
-
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
-        const numPages = pdf.numPages;
-
-        if (numPages === 0) {
-            throw new Error("The selected PDF document contains no pages.");
-        }
-
-        const rawName = customFilename || file.name.replace(/\.[^/.]+$/, "");
-        const safeBase = rawName.replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/^_+|_+$/g, "") || "converted_file";
-
-        if (numPages === 1) {
-            this.setLoadingStatus("Rendering Page 1 of 1...", "Exporting high-resolution image...");
-            const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 2.0 });
-
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.floor(viewport.width);
-            canvas.height = Math.floor(viewport.height);
-            const ctx = canvas.getContext("2d");
-
-            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
-            const blob = await new Promise((resolve, reject) => {
-                canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), mimeType, 0.92);
-            });
-
-            const blobUrl = URL.createObjectURL(blob);
-            const outFilename = `${safeBase}.${ext}`;
-            const sizeFormatted = blob.size < 1024 * 1024
-                ? `${(blob.size / 1024).toFixed(1)} KB`
-                : `${(blob.size / (1024 * 1024)).toFixed(2)} MB`;
-
-            this.showSuccess({
-                filename: outFilename,
-                size_formatted: sizeFormatted,
-                blobUrl: blobUrl,
-                isClientSide: true
-            });
-        } else {
-            const zip = new JSZip();
-            const padDigits = Math.max(2, String(numPages).length);
-
-            for (let i = 1; i <= numPages; i++) {
-                const percent = Math.round((i / numPages) * 100);
-                this.setLoadingStatus("Rendering PDF Pages...", `Rendering page ${i} of ${numPages} (${percent}%)...`);
-
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 2.0 });
-
-                const canvas = document.createElement("canvas");
-                canvas.width = Math.floor(viewport.width);
-                canvas.height = Math.floor(viewport.height);
-                const ctx = canvas.getContext("2d");
-
-                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
-                const pageBlob = await new Promise((resolve, reject) => {
-                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), mimeType, 0.92);
-                });
-
-                const pageNumStr = String(i).padStart(padDigits, "0");
-                zip.file(`page_${pageNumStr}.${ext}`, pageBlob);
-            }
-
-            this.setLoadingStatus("Packaging Archive...", "Compressing all rendered pages into ZIP...");
-            const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" }, (metadata) => {
-                this.setLoadingStatus("Packaging Archive...", `Compressing ZIP: ${Math.round(metadata.percent)}%...`);
-            });
-
-            const blobUrl = URL.createObjectURL(zipBlob);
-            const outFilename = `${safeBase}_pages.zip`;
-            const sizeFormatted = zipBlob.size < 1024 * 1024
-                ? `${(zipBlob.size / 1024).toFixed(1)} KB`
-                : `${(zipBlob.size / (1024 * 1024)).toFixed(2)} MB`;
-
-            this.showSuccess({
-                filename: outFilename,
-                size_formatted: sizeFormatted,
-                blobUrl: blobUrl,
-                isClientSide: true
-            });
-        }
-    },
-
-    async convertImageClientSide(file, outputFormat, customFilename) {
-        this.hideWorkspaceSubsections();
-        const loadingCard = document.getElementById("converter-loading-card");
-        loadingCard.style.display = "block";
-        this.setLoadingStatus("Converting Image...", "Processing image locally in browser...");
-
-        const outFormat = (outputFormat || "png").toLowerCase();
-        let mimeType = "image/png";
-        if (outFormat === "jpg" || outFormat === "jpeg") mimeType = "image/jpeg";
-        else if (outFormat === "webp") mimeType = "image/webp";
-
-        const rawName = customFilename || file.name.replace(/\.[^/.]+$/, "");
-        const safeBase = rawName.replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/^_+|_+$/g, "") || "converted_image";
-
-        const imageBitmap = await createImageBitmap(file);
-        const canvas = document.createElement("canvas");
-        canvas.width = imageBitmap.width;
-        canvas.height = imageBitmap.height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(imageBitmap, 0, 0);
-
-        const blob = await new Promise((resolve, reject) => {
-            canvas.toBlob(b => b ? resolve(b) : reject(new Error("Image export failed")), mimeType, 0.95);
-        });
-
-        const blobUrl = URL.createObjectURL(blob);
-        const outFilename = `${safeBase}.${outFormat === "jpeg" ? "jpg" : outFormat}`;
-        const sizeFormatted = blob.size < 1024 * 1024
-            ? `${(blob.size / 1024).toFixed(1)} KB`
-            : `${(blob.size / (1024 * 1024)).toFixed(2)} MB`;
-
-        this.showSuccess({
-            filename: outFilename,
-            size_formatted: sizeFormatted,
-            blobUrl: blobUrl,
-            isClientSide: true
-        });
-    },
-
-    setLoadingStatus(title, subtitle) {
-        const loadingCard = document.getElementById("converter-loading-card");
-        if (loadingCard) {
-            const titleEl = loadingCard.querySelector(".status-title");
-            const subEl = loadingCard.querySelector(".status-subtitle");
-            if (titleEl && title) titleEl.textContent = title;
-            if (subEl && subtitle) subEl.textContent = subtitle;
+            this.showError("Network interruption occurred while converting file.");
         }
     },
 
     showSuccess(data) {
-        this.hideWorkspaceSubsections();
+        const fnEl = document.getElementById("conv-success-filename");
+        const szEl = document.getElementById("conv-success-filesize");
+        const fmtEl = document.getElementById("conv-success-format");
+        const dlBtn = document.getElementById("conv-direct-download-btn");
 
-        // Revoke previous blob URL to prevent memory leaks
-        if (this.currentBlobUrl) {
-            URL.revokeObjectURL(this.currentBlobUrl);
-            this.currentBlobUrl = null;
+        if (fnEl) fnEl.textContent = data.filename || "converted_file";
+        if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
+        if (fmtEl) fmtEl.textContent = (document.getElementById("converter-format-select")?.value || "FILE").toUpperCase();
+
+        if (dlBtn) {
+            const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
+            dlBtn.href = downloadUrl;
+            dlBtn.setAttribute("download", data.filename || "converted_file");
         }
 
-        const successCard = document.getElementById("converter-success-card");
-        document.getElementById("converter-success-filename").textContent = data.filename || "converted_file";
-        document.getElementById("converter-success-filesize").textContent = data.size_formatted || "Ready";
+        // Reset email widget state
+        const emailWidget = document.getElementById("conv-email-widget");
+        const emailInput = document.getElementById("conv-email-input");
+        const emailStatus = document.getElementById("conv-email-status-message");
+        const emailSendBtn = document.getElementById("conv-email-send-btn");
 
-        const directBtn = document.getElementById("converter-direct-download-btn");
-        const expiryNotice = successCard.querySelector(".expiry-notice");
+        if (emailWidget) emailWidget.classList.remove("open");
+        if (emailInput) emailInput.value = "";
+        if (emailStatus) {
+            emailStatus.className = "email-status-message";
+            emailStatus.textContent = "";
+        }
+        if (emailSendBtn) emailSendBtn.disabled = false;
 
-        if (data.blobUrl) {
-            this.currentBlobUrl = data.blobUrl;
-            directBtn.href = data.blobUrl;
-            directBtn.setAttribute("download", data.filename || "converted_file");
-            if (expiryNotice) {
-                expiryNotice.textContent = "⚡ Rendered instantly on your device — Zero server upload, zero file size limits.";
+        this.showView("success-view");
+    },
+
+    async sendEmail() {
+        if (!this.currentFileId) return;
+
+        const emailInput = document.getElementById("conv-email-input");
+        const emailStatus = document.getElementById("conv-email-status-message");
+        const emailSendBtn = document.getElementById("conv-email-send-btn");
+
+        const email = emailInput?.value.trim() || "";
+        if (!email || !email.includes("@")) {
+            if (emailStatus) {
+                emailStatus.className = "email-status-message error";
+                emailStatus.textContent = "Please enter a valid email address.";
             }
-        } else {
-            directBtn.href = `/download/${encodeURIComponent(data.file_id)}`;
-            directBtn.removeAttribute("download");
-            if (expiryNotice) {
-                expiryNotice.textContent = "⏳ Stored securely in isolated temporary workspace for 30 minutes.";
-            }
+            return;
         }
 
-        successCard.style.display = "block";
+        if (emailSendBtn) {
+            emailSendBtn.disabled = true;
+            emailSendBtn.textContent = "Sending...";
+        }
+
+        try {
+            const response = await fetch("/api/send-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    file_id: this.currentFileId,
+                    email: email
+                })
+            });
+
+            const data = await response.json();
+
+            if (emailSendBtn) {
+                emailSendBtn.disabled = false;
+                emailSendBtn.textContent = "Send";
+            }
+
+            if (response.ok && data.success) {
+                if (emailStatus) {
+                    emailStatus.className = "email-status-message success";
+                    emailStatus.textContent = data.message || `File successfully delivered to ${email}!`;
+                }
+            } else {
+                if (emailStatus) {
+                    emailStatus.className = "email-status-message error";
+                    emailStatus.textContent = (data.error && data.error.message) || "Could not deliver email.";
+                }
+            }
+        } catch (err) {
+            if (emailSendBtn) {
+                emailSendBtn.disabled = false;
+                emailSendBtn.textContent = "Send";
+            }
+            if (emailStatus) {
+                emailStatus.className = "email-status-message error";
+                emailStatus.textContent = "Network error delivering email.";
+            }
+        }
     },
 
     showError(msg) {
-        this.hideWorkspaceSubsections();
-        const errCard = document.getElementById("converter-error-card");
-        document.getElementById("converter-error-message").textContent = msg;
-        errCard.style.display = "block";
+        const errorEl = document.getElementById("conv-error-message");
+        if (errorEl) errorEl.textContent = msg || "An error occurred during conversion.";
+        this.showView("error-view");
     },
 
-    hideWorkspaceSubsections() {
-        document.getElementById("converter-upload-form").style.display = "none";
-        document.getElementById("converter-loading-card").style.display = "none";
-        document.getElementById("converter-success-card").style.display = "none";
-        document.getElementById("converter-error-card").style.display = "none";
-    },
+    initModals() {
+        const openAbout = document.getElementById("open-about-modal");
+        const closeAbout = document.getElementById("close-about-modal");
+        const aboutModal = document.getElementById("about-modal");
 
-    resetWorkspace() {
-        if (this.currentBlobUrl) {
-            URL.revokeObjectURL(this.currentBlobUrl);
-            this.currentBlobUrl = null;
+        const openFormats = document.getElementById("open-formats-modal");
+        const closeFormats = document.getElementById("close-formats-modal");
+        const formatsModal = document.getElementById("formats-modal");
+
+        if (openAbout && aboutModal) {
+            openAbout.addEventListener("click", () => aboutModal.classList.add("show"));
         }
-        this.selectedFiles = [];
-        this.renderSelectedFiles();
-        this.hideWorkspaceSubsections();
-        this.setLoadingStatus("Processing Conversion...", "Converting with native high-performance engines.");
-        document.getElementById("converter-upload-form").style.display = "block";
+        if (closeAbout && aboutModal) {
+            closeAbout.addEventListener("click", () => aboutModal.classList.remove("show"));
+        }
+        if (openFormats && formatsModal) {
+            openFormats.addEventListener("click", () => formatsModal.classList.add("show"));
+        }
+        if (closeFormats && formatsModal) {
+            closeFormats.addEventListener("click", () => formatsModal.classList.remove("show"));
+        }
+
+        [aboutModal, formatsModal].forEach(modal => {
+            if (modal) {
+                modal.addEventListener("click", (e) => {
+                    if (e.target === modal) modal.classList.remove("show");
+                });
+            }
+        });
     }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-    Converter.init();
+    ConverterApp.init();
 });
-
-window.Converter = Converter;

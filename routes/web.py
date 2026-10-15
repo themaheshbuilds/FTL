@@ -11,3 +11,10 @@ def index():
     """Render LinkForge main interface."""
     return render_template("index.html")
 
+
+@web_bp.route("/converter", methods=["GET"])
+def converter():
+    """Render LinkForge converter interface."""
+    return render_template("converter.html")
+
+

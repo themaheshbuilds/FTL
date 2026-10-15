@@ -22,36 +22,33 @@ Avoid:
 
 - **Name:** LinkForge
 - **Tagline:** One Link. Any File.
-- **Color Palette:**
-  - Background Main: `#f8fafc` (slate-50)
-  - Surface Card: `#ffffff`
-  - Subtle Border: `#e2e8f0`
-  - Text Primary: `#0f172a` (slate-900)
-  - Text Secondary: `#475569` (slate-600)
-  - Brand Primary: `#4f46e5` (indigo-600)
-  - Brand Hover: `#4338ca` (indigo-700)
-  - Accent Green: `#10b981` (emerald-500)
-  - Accent Red: `#ef4444` (rose-500)
+- **Color Palette (Peach Glow Glassmorphism):**
+  - Peach Canvas: `#fff5eb` (warm, soft peach backdrop with apricot and peach-blush ambient mesh)
+  - Yellow / Orange: Primary Brand & CTAs (`#f97316` / `#f59e0b` / `#fbbf24`)
+  - White: Frosted Glass Cards, Clean Surfaces & Button Text (`#ffffff`, `rgba(255, 255, 255, 0.88)`)
+  - Sky Blue: Active Nav Tabs, Focus Glows & Badges (`#0ea5e9` / `#38bdf8` / `#0284c7`)
+  - Green: Success Badges, Ready Checkmarks & Verified Actions (`#10b981` / `#16a34a`)
+  - Red: Error Icons, Alerts & Destructive/Clear Actions (`#ef4444` / `#dc2626`)
+  - Charcoal Typography: `#1c1917` (ensures optimal readability and contrast on peach surfaces)
 - **Typography:**
   - Headings & Body: `'Plus Jakarta Sans'`, sans-serif
-  - Monospace / Badges: `'JetBrains Mono'`, monospace
+  - Monospace / Badges / Filenames: `'JetBrains Mono'`, monospace
 
 ---
 
-## 3. Navigation & Mode Switcher
+## 3. Navigation & Separate Page Architecture
 
-The top navigation header houses the unified brand logo and a seamless mode switch:
+LinkForge utilizes dedicated, specialized HTML templates with unified top pill navigation:
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ ⚡ LINKFORGE       [ 🔗 Link Downloader | 🔄 File Converter ]    About │
-└────────────────────────────────────────────────────────────────────────┘
-```
+- **Link Downloader:** Rendered at `/` and `/index` via `templates/index.html` (controller: `static/js/downloader.js`)
+- **File Converter:** Rendered at `/converter` via `templates/converter.html` (controller: `static/js/converter.js`)
 
-The header mode tabs (`.mode-tabs`):
-- Capsule pill design (`border-radius: 9999px`)
-- Clicking a tab toggles between `#downloader-view` and `#converter-view` with zero page reload
-- Active tab features white background surface and subtle drop-shadow
+Navigation Header Structure:
+- Brand Logo with glowing lightning bolt icon
+- Mode tabs with capsule pill styling and active glow:
+  - `[ 🔗 Link Downloader ]` (links to `/`)
+  - `[ ⇄ File Converter ]` (links to `/converter`)
+- Modals for About and Supported Platforms / Formats
 
 ---
 

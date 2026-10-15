@@ -1,11 +1,16 @@
 import os
 import re
 import time
+import uuid
 import smtplib
 from pathlib import Path
+from datetime import datetime, timezone
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+from email.utils import formatdate, make_msgid
 from typing import Tuple, Optional, Dict, List
 
 from config import Config
@@ -17,12 +22,10 @@ logger = get_logger("linkforge.email_service")
 # Regex for email validation
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
-# Maximum attachment size for standard email providers (25 MB)
-MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 
 class EmailService:
-    """Handles sending generated and converted files to user email addresses via SMTP or Resend."""
+    """Handles sending generated and converted files to user email addresses via SMTP."""
 
     # In-memory IP rate limiter: {ip: [timestamps]}
     _ip_history: Dict[str, List[float]] = {}
@@ -41,40 +44,39 @@ class EmailService:
         return False
 
     @classmethod
-    def validate_email(cls, email: str) -> bool:
-        """Validate recipient email address syntax and length."""
+    def validate_email(cls, email: Optional[str]) -> bool:
         if not email or not isinstance(email, str):
             return False
-        email_clean = email.strip()
-        if len(email_clean) > 100 or len(email_clean) < 5:
-            return False
-        return bool(EMAIL_REGEX.match(email_clean))
+        return bool(EMAIL_REGEX.match(email.strip()))
 
-    @classmethod
-    def format_size(cls, size_bytes: int) -> str:
-        """Human-readable size format."""
+    is_valid_email = validate_email
+
+    @staticmethod
+    def format_size(size_bytes: int) -> str:
         if size_bytes < 1024:
             return f"{size_bytes} B"
-        elif size_bytes < 1024 * 1024:
+        elif size_bytes < 1024 ** 2:
             return f"{size_bytes / 1024:.1f} KB"
-        else:
-            return f"{size_bytes / (1024 * 1024):.2f} MB"
+        elif size_bytes < 1024 ** 3:
+            return f"{size_bytes / (1024 ** 2):.1f} MB"
+        return f"{size_bytes / (1024 ** 3):.1f} GB"
 
     @classmethod
     def send_file_email(
         cls,
-        file_id: str,
-        recipient_email: str,
+        recipient: str = "",
+        file_id: str = "",
         client_ip: str = "",
-        base_url: str = ""
-    ) -> Tuple[bool, Optional[str]]:
-        """Send generated or converted file to recipient email.
-        
-        Returns:
-            Tuple of (success: bool, error_message_or_success_message: Optional[str])
+        base_url: str = "",
+        recipient_email: str = "",
+    ) -> Tuple[bool, str]:
         """
-        # 1. Validate Email
-        recipient = (recipient_email or "").strip().lower()
+        Send a file to the recipient email. Returns (success, message).
+        Files are always attached directly to the email.
+        """
+        recipient = (recipient or recipient_email or "").strip()
+
+        # 1. Validate email
         if not cls.validate_email(recipient):
             return False, "Please provide a valid recipient email address."
 
@@ -93,7 +95,6 @@ class EmailService:
             filename = job.output_filename or os.path.basename(file_path)
             file_size = job.filesize or os.path.getsize(file_path)
         else:
-            # Resilient disk search for serverless cold-start instances
             gen_dir = Config.GENERATED_STORAGE_DIR / file_id
             if gen_dir.exists() and gen_dir.is_dir():
                 files = [p for p in gen_dir.iterdir() if p.is_file()]
@@ -105,135 +106,172 @@ class EmailService:
         if not file_path or not os.path.exists(file_path):
             return False, "The file is no longer available or has expired. Please regenerate it."
 
-        # 4. Check attachment feasibility (<= 25 MB)
-        can_attach = file_size <= MAX_ATTACHMENT_BYTES
+        # 4. Always attach the file directly
         size_str = cls.format_size(file_size)
         download_url = f"{base_url.rstrip('/')}/download/{file_id}" if base_url else f"/download/{file_id}"
 
-        # 5. Build Email Content
-        subject = f"Your file is ready: {filename} ({size_str})"
+        # 5. Build Email
+        smtp_user = Config.SMTP_USER
+        smtp_pass = Config.SMTP_PASSWORD
         sender_name = Config.SMTP_FROM_NAME or "LinkForge"
-        sender_email = Config.SMTP_USER or "b3242412@gmail.com"
+
+        if not smtp_pass:
+            return False, (
+                "Email delivery is not configured. "
+                "Please add your Gmail App Password to SMTP_PASSWORD in .env."
+            )
+
+        # Clean subject - no emoji (spam trigger)
+        subject = f"Your file is ready: {filename} ({size_str})"
 
         msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
-        msg["From"] = f"{sender_name} <{sender_email}>"
+        msg["From"] = f"{sender_name} <{smtp_user}>"
         msg["To"] = recipient
+        msg["Reply-To"] = smtp_user
+        msg["Date"] = formatdate(localtime=False)
+        msg["Message-ID"] = make_msgid(domain="gmail.com")
+        msg["X-Mailer"] = "LinkForge/1.0"
+        msg["MIME-Version"] = "1.0"
+        # Precedence bulk helps avoid out-of-office autoreplies, not spam classification
+        msg["Precedence"] = "bulk"
 
-        # Alternative part for plain text & HTML
-        alt_part = MIMEMultipart("alternative")
+        # 6. Build plain text body (important for spam score)
+        attach_note = "The file is attached directly to this email."
 
         plain_text = (
             f"Hello,\n\n"
             f"Your file '{filename}' ({size_str}) is ready.\n\n"
-            f"{'The file is attached to this email.' if can_attach else 'Due to email provider size limits (>25 MB), your file is available via direct download.'}\n\n"
-            f"Download Link: {download_url}\n\n"
-            f"Note: Temporary links remain available for 30 minutes.\n\n"
-            f"— {sender_name}"
+            f"{attach_note}\n\n"
+            f"Download link: {download_url}\n\n"
+            f"Note: Download links expire after 30 minutes.\n\n"
+            f"-- {sender_name} Team"
         )
 
-        attachment_badge = (
-            '<div style="margin-top: 15px; padding: 10px 14px; background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; border-radius: 4px; color: #047857; font-size: 14px;">'
-            '📎 <strong>File Attached:</strong> This file is attached directly to this email.'
-            '</div>'
-            if can_attach else
-            '<div style="margin-top: 15px; padding: 10px 14px; background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; border-radius: 4px; color: #1d4ed8; font-size: 14px;">'
-            '🚀 <strong>Large File Notice:</strong> Since this file exceeds 25 MB, click the button below to download it securely.'
-            '</div>'
+        # 7. Build clean HTML body
+        status_block = (
+            '<div style="margin-top:16px;padding:12px 16px;background:#f0fdf4;'
+            'border-left:4px solid #16a34a;border-radius:4px;color:#15803d;font-size:14px;">'
+            '<strong>File Attached:</strong> Your file is attached directly to this email.</div>'
         )
 
         html_body = f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 24px; color: #e2e8f0; }}
-  .container {{ max-width: 580px; margin: 0 auto; background: #1e293b; border-radius: 12px; border: 1px solid #334155; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }}
-  .header {{ background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 28px 24px; text-align: center; color: #ffffff; }}
-  .header h1 {{ margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }}
-  .content {{ padding: 28px 24px; }}
-  .file-box {{ background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 18px; margin: 20px 0; }}
-  .file-row {{ display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }}
-  .file-label {{ color: #94a3b8; font-weight: 500; }}
-  .file-val {{ color: #f8fafc; font-weight: 600; word-break: break-all; }}
-  .btn-container {{ text-align: center; margin: 28px 0 16px; }}
-  .btn {{ display: inline-block; background: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 15px; padding: 14px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }}
-  .footer {{ padding: 20px 24px; background: #0f172a; border-top: 1px solid #334155; text-align: center; font-size: 12px; color: #64748b; }}
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your file is ready - LinkForge</title>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>⚡ LinkForge File Delivery</h1>
-    </div>
-    <div class="content">
-      <p style="font-size: 16px; margin: 0 0 16px; color: #cbd5e1;">Your requested file has been generated and is ready for use.</p>
-      
-      <div class="file-box">
-        <div style="font-size: 16px; font-weight: 700; color: #818cf8; margin-bottom: 12px;">📁 File Details</div>
-        <div style="margin-bottom: 8px;"><span style="color: #94a3b8;">Filename:</span> <strong style="color: #ffffff;">{filename}</strong></div>
-        <div style="margin-bottom: 8px;"><span style="color: #94a3b8;">Filesize:</span> <strong style="color: #ffffff;">{size_str}</strong></div>
-        <div><span style="color: #94a3b8;">Status:</span> <strong style="color: #10b981;">✓ Ready</strong></div>
-      </div>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 24px;text-align:center;">
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">
+              LinkForge - File Ready
+            </h1>
+            <p style="margin:8px 0 0;color:#c7d2fe;font-size:14px;">Your download has been prepared</p>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:28px 24px;">
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+              Hello,<br><br>
+              Your file has been processed and is ready for you.
+            </p>
+            <!-- File details box -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:0;">
+              <tr><td style="padding:16px 20px;">
+                <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.5px;">File Details</p>
+                <table width="100%" cellpadding="4" cellspacing="0">
+                  <tr>
+                    <td style="color:#6b7280;font-size:14px;width:90px;">Filename</td>
+                    <td style="color:#111827;font-size:14px;font-weight:600;">{filename}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#6b7280;font-size:14px;">Size</td>
+                    <td style="color:#111827;font-size:14px;font-weight:600;">{size_str}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#6b7280;font-size:14px;">Status</td>
+                    <td style="color:#16a34a;font-size:14px;font-weight:600;">Ready</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>
 
-      {attachment_badge}
+            {status_block}
 
-      <div class="btn-container">
-        <a href="{download_url}" class="btn" target="_blank">⬇️ Download File</a>
-      </div>
-    </div>
-    <div class="footer">
-      <p style="margin: 0 0 6px;">LinkForge — Universal Downloader & File Converter</p>
-      <p style="margin: 0;">Temporary downloads automatically expire in 30 minutes.</p>
-    </div>
-  </div>
+            <!-- Download button -->
+            <div style="text-align:center;margin:28px 0 8px;">
+              <a href="{download_url}"
+                 style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;
+                        font-weight:600;font-size:15px;padding:14px 32px;border-radius:8px;
+                        box-shadow:0 4px 12px rgba(79,70,229,0.3);">
+                Download File
+              </a>
+            </div>
+            <p style="text-align:center;margin:8px 0 0;font-size:12px;color:#9ca3af;">
+              Link expires in 30 minutes
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              Sent by LinkForge - Universal Downloader &amp; File Converter<br>
+              This is an automated message. Please do not reply to this email.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>"""
 
+        # Attach text + html as alternatives
+        alt_part = MIMEMultipart("alternative")
         alt_part.attach(MIMEText(plain_text, "plain", "utf-8"))
         alt_part.attach(MIMEText(html_body, "html", "utf-8"))
         msg.attach(alt_part)
 
-        # 6. Attach File if <= 25 MB
-        if can_attach:
-            try:
-                with open(file_path, "rb") as f:
-                    file_data = f.read()
-                part = MIMEApplication(file_data, Name=filename)
-                part.add_header("Content-Disposition", "attachment", filename=filename)
-                msg.attach(part)
-            except Exception as e:
-                logger.warning(f"Could not attach file to email, proceeding with link only: {e}")
+        # 8. Always attach the file
+        try:
+            with open(file_path, "rb") as f:
+                file_data = f.read()
+            part = MIMEApplication(file_data, Name=filename)
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            msg.attach(part)
+        except Exception as e:
+            logger.warning(f"Could not attach file: {e}")
 
-        # 7. Deliver via SMTP
-        smtp_user = Config.SMTP_USER
-        smtp_pass = Config.SMTP_PASSWORD
-
-        if not smtp_pass:
-            return False, (
-                "Email delivery is not fully configured yet. "
-                "A 16-character Google App Password must be added to SMTP_PASSWORD in .env."
-            )
-
+        # 9. Send via SMTP
         try:
             host = Config.SMTP_HOST or "smtp.gmail.com"
             port = int(Config.SMTP_PORT or 587)
-            logger.info(f"Connecting to SMTP {host}:{port} to send file to {recipient}...")
+            logger.info(f"Connecting SMTP {host}:{port} -> {recipient}")
 
             server = smtplib.SMTP(host, port, timeout=25)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, [recipient], msg.as_string())
-            server.quit()
+            try:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, [recipient], msg.as_string())
+            finally:
+                server.quit()
 
-            logger.info(f"Successfully emailed {filename} to {recipient}")
+            logger.info(f"Email sent: {filename} -> {recipient}")
             return True, f"File successfully sent to {recipient}!"
 
         except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"SMTP authentication failed for user {smtp_user}: {e}")
-            return False, "Gmail authentication failed. Please check your 16-character Google App Password in SMTP_PASSWORD."
+            logger.error(f"SMTP auth failed for {smtp_user}: {e}")
+            return False, "Gmail authentication failed. Please verify your App Password in SMTP_PASSWORD."
         except Exception as e:
-            logger.error(f"SMTP send error to {recipient}: {e}", exc_info=True)
+            logger.error(f"SMTP send error -> {recipient}: {e}", exc_info=True)
             return False, f"Email delivery failed: {str(e)}"

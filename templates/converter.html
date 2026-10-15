@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkForge — Universal File Converter</title>
+  <meta name="description" content="Convert PDF to images, images to PDF, video to audio, DOCX to PDF, and more locally with zero file retention.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app-wrapper">
+
+    <!-- Top Navigation Header -->
+    <header class="site-header">
+      <div class="header-container">
+        <a href="/" class="brand-logo" id="brand-link">
+          <div class="brand-icon-box">&#x26A1;</div>
+          <span class="brand-name">LINKFORGE</span>
+        </a>
+
+        <!-- Mode Nav Switcher -->
+        <nav class="mode-nav" role="tablist">
+          <a href="/" class="mode-tab" role="tab">
+            <span class="icon">&#x1F517;</span>
+            <span class="pill-label">Link Downloader</span>
+          </a>
+          <a href="/converter" class="mode-tab active" role="tab">
+            <span class="icon">&#x21C4;</span>
+            <span class="pill-label">File Converter</span>
+          </a>
+        </nav>
+
+        <!-- Header Actions -->
+        <div class="header-actions">
+          <button type="button" class="ghost-btn" id="open-about-modal">About</button>
+          <button type="button" class="ghost-btn" id="open-formats-modal">Supported Formats</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Main Content -->
+    <main class="page-container">
+      
+      <!-- Hero Section -->
+      <section class="hero-section">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Fast. Private. Local.
+        </div>
+        <h1 class="hero-title">
+          Convert any file<br>
+          <span class="hero-title-grad">in seconds, locally</span>
+        </h1>
+        <p class="hero-subtitle">
+          Transform PDF documents, extract audio from videos, convert images, and format documents privately and securely.
+        </p>
+      </section>
+
+      <!-- Category Filter Tabs -->
+      <div class="converter-categories">
+        <button type="button" class="category-tab active" data-category="all">&#x26A1; All Tools</button>
+        <button type="button" class="category-tab" data-category="docs">&#x1F4C4; Documents</button>
+        <button type="button" class="category-tab" data-category="media">&#x1F3AC; Video &amp; Audio</button>
+        <button type="button" class="category-tab" data-category="images">&#x1F5BC;&#xFE0F; Images</button>
+      </div>
+
+      <!-- Tools Selection Grid -->
+      <div class="tools-grid" id="converter-tools-grid"></div>
+
+      <!-- Glassmorphic Working Card -->
+      <div class="glass-card">
+
+        <!-- 1. Upload View -->
+        <div id="converter-upload-view">
+          <div class="dropzone-container" id="converter-dropzone">
+            <input type="file" id="converter-file-input" style="display:none">
+            <div class="dropzone-icon">&#x1F4C1;</div>
+            <h3 class="dropzone-title" id="active-dropzone-title">Drop your file here</h3>
+            <p class="dropzone-sub" id="active-dropzone-sub">
+              Drag &amp; drop files or <span class="browse-link" id="converter-browse-btn">browse files</span>
+            </p>
+            <div class="file-chips-preview">
+              <span class="platform-chip">PDF</span>
+              <span class="platform-chip">DOCX</span>
+              <span class="platform-chip">MP4</span>
+              <span class="platform-chip">MKV</span>
+              <span class="platform-chip">JPG</span>
+              <span class="platform-chip">PNG</span>
+              <span class="platform-chip">WebP</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Configuration & Staged View -->
+        <div id="converter-config-view" class="hidden">
+          <div class="result-header">
+            <div>
+              <div class="result-meta-top">
+                <span class="badge-platform" id="active-tool-badge">&#x26A1; Active Tool</span>
+              </div>
+              <h2 class="result-title">Ready for Conversion</h2>
+              <p class="result-summary">Review selected files and configure your output options.</p>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-reset-converter-config">&#x2190; Cancel</button>
+          </div>
+
+          <!-- Staged Files List -->
+          <div id="staged-files-list"></div>
+
+          <!-- Settings Row -->
+          <div class="settings-row" style="margin-top:20px">
+            <div class="setting-group">
+              <label class="setting-label" for="converter-format-select">Target Output Format</label>
+              <select id="converter-format-select" class="styled-select"></select>
+            </div>
+            <div class="setting-group">
+              <label class="setting-label" for="converter-custom-filename">Custom Filename (Optional)</label>
+              <input type="text" id="converter-custom-filename" class="styled-input" placeholder="e.g. converted_report">
+            </div>
+          </div>
+
+          <!-- Action -->
+          <div style="text-align:center;margin-top:24px">
+            <button type="button" class="btn-primary" id="btn-start-convert" style="min-width:240px;font-size:16px;padding:14px 32px">
+              &#x26A1; Convert File Now
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Processing View -->
+        <div id="converter-processing-view" class="loading-view hidden">
+          <div class="spinner-ring"></div>
+          <h3 class="loading-title">Converting Your File...</h3>
+          <p class="loading-subtitle">Applying transformations and packaging your output</p>
+        </div>
+
+        <!-- 4. Success View -->
+        <div id="converter-success-view" class="success-view hidden">
+          <div class="success-badge-icon">&#x2713;</div>
+          <h2 class="success-title">Conversion Complete!</h2>
+          <p class="success-subtitle">Your converted file is ready for download.</p>
+
+          <div class="file-info-box">
+            <div class="file-info-row">
+              <span class="info-key">Filename</span>
+              <span class="info-value" id="conv-success-filename">file</span>
+            </div>
+            <div class="file-info-row">
+              <span class="info-key">File Size</span>
+              <span class="info-value" id="conv-success-filesize">0 MB</span>
+            </div>
+            <div class="file-info-row">
+              <span class="info-key">Output Format</span>
+              <span class="info-value" id="conv-success-format">FILE</span>
+            </div>
+          </div>
+
+          <div class="success-actions">
+            <a href="#" class="btn-primary" id="conv-direct-download-btn" style="padding:14px 28px;font-size:15px">
+              &#x2193; Download Converted File
+            </a>
+            <button type="button" class="btn-secondary" id="btn-reset-converter-success">
+              Convert Another File
+            </button>
+          </div>
+
+          <!-- Email Delivery Widget -->
+          <div class="email-delivery-widget" id="conv-email-widget">
+            <div class="email-toggle-button" id="conv-email-toggle-btn">
+              <span class="email-toggle-title">
+                <span>&#x2709;&#xFE0F;</span> Send this file to your email
+              </span>
+              <span class="email-toggle-arrow">&#x25BC;</span>
+            </div>
+            <div class="email-form-panel">
+              <div class="email-input-row">
+                <input
+                  type="email"
+                  class="email-input-field"
+                  id="conv-email-input"
+                  placeholder="Enter your email address..."
+                  autocomplete="email"
+                >
+                <button type="button" class="email-send-button" id="conv-email-send-btn">
+                  Send
+                </button>
+              </div>
+              <div class="email-status-message" id="conv-email-status-message"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Error View -->
+        <div id="converter-error-view" class="error-view hidden">
+          <div class="error-badge-icon">&#x26A0;</div>
+          <h2 class="error-title">Conversion Failed</h2>
+          <p class="error-message" id="conv-error-message">
+            Unable to process this file. Please verify the file is not corrupted or password protected.
+          </p>
+          <button type="button" class="btn-primary" id="btn-reset-converter-error" style="min-width:180px">
+            Try Again
+          </button>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- About Modal -->
+    <div class="modal-backdrop" id="about-modal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">About LinkForge File Converter</h3>
+          <button type="button" class="modal-close-btn" id="close-about-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <h4>Private &amp; Secure Processing</h4>
+          <p>
+            LinkForge converts your documents, media, and images directly on the server without permanent storage. Converted files are automatically deleted after 30 minutes.
+          </p>
+          <h4>Direct Email Attachment</h4>
+          <p>
+            You can optionally deliver your converted files directly to any email address as real file attachments.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supported Formats Modal -->
+    <div class="modal-backdrop" id="formats-modal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">Supported Converter Formats</h3>
+          <button type="button" class="modal-close-btn" id="close-formats-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <h4>Documents</h4>
+          <ul>
+            <li><strong>PDF to Images:</strong> Extracts all pages into high-resolution JPG or PNG files packaged in a ZIP.</li>
+            <li><strong>Images to PDF:</strong> Merges multiple JPG, PNG, or WebP images into a single clean PDF document.</li>
+            <li><strong>Word (DOCX) to PDF:</strong> Converts Word documents into PDF.</li>
+            <li><strong>PDF to Word (DOCX):</strong> Extracts editable content into a DOCX document.</li>
+          </ul>
+          <h4>Audio &amp; Video</h4>
+          <ul>
+            <li><strong>Video to Audio:</strong> Extracts crystal-clear MP3 or M4A audio from MP4, MKV, WebM, MOV, and AVI videos.</li>
+            <li><strong>Video Transcoding:</strong> Converts videos between MP4, MKV, and WebM formats.</li>
+          </ul>
+          <h4>Images</h4>
+          <ul>
+            <li><strong>Image Converter:</strong> Converts and compresses images between WebP, PNG, and JPG.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <p>&copy; 2026 LinkForge. Universal Link Downloader &amp; File Converter Engine.</p>
+      <div class="footer-links">
+        <a href="/">Link Downloader</a>
+        <a href="/converter">File Converter</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/converter.js') }}"></script>
+</body>
+</html>
