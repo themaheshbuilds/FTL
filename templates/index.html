@@ -101,131 +101,158 @@
 
           <!-- Platform Chips -->
           <div class="platform-section">
-            <div class="platform-title">Supported Platforms</div>
+            <div class="platform-title">Quick Supported Platforms</div>
             <div class="platform-chips-row">
               <div class="platform-chip ig"><span>&#x1F4F8;</span> Instagram</div>
               <div class="platform-chip yt"><span>&#x25B6;&#xFE0F;</span> YouTube</div>
               <div class="platform-chip tt"><span>&#x1F3B5;</span> TikTok</div>
               <div class="platform-chip rd"><span>&#x1F916;</span> Reddit</div>
               <div class="platform-chip li"><span>&#x1F4BC;</span> LinkedIn</div>
-              <div class="platform-chip tw"><span>&#x1D54F;</span> X (Twitter)</div>
-              <div class="platform-chip fb"><span>&#x1F465;</span> Facebook</div>
+              <div class="platform-chip"><span>&#x1D54F;</span> X (Twitter)</div>
+              <div class="platform-chip fb"><span>&#x1F464;</span> Facebook</div>
               <div class="platform-chip"><span>&#x1F310;</span> Direct Files</div>
             </div>
           </div>
         </div>
 
-        <!-- 2. Loading / Analyzing State -->
-        <div id="loading-view" class="hidden">
-          <div class="loader-container">
-            <div class="spinner"></div>
-            <h3 class="loader-title">Analyzing Media Source...</h3>
-            <p class="loader-sub">Extracting direct streams, metadata, and format choices.</p>
+        <!-- 2. Loading View -->
+        <div id="loading-view" class="loading-view hidden">
+          <div class="spinner-ring"></div>
+          <h3 class="loading-title">Analyzing Link...</h3>
+          <p class="loading-subtitle">Extracting content structure and media streams</p>
+          <div class="analysis-steps">
+            <div class="step-item active" id="step-platform">
+              <span class="step-dot"></span> Platform
+            </div>
+            <div class="step-item" id="step-content">
+              <span class="step-dot"></span> Content Type
+            </div>
+            <div class="step-item" id="step-media">
+              <span class="step-dot"></span> Media Streams
+            </div>
           </div>
         </div>
 
-        <!-- 3. Result / Options State -->
-        <div id="result-view" class="hidden">
+        <!-- 3. Options View -->
+        <div id="options-view" class="hidden">
           <div class="result-header">
             <div>
               <div class="result-meta-top">
-                <span class="badge-platform" id="meta-platform">Instagram</span>
-                <span class="badge-type" id="meta-type">Reel</span>
+                <span class="badge-platform" id="res-platform">Platform</span>
+                <span class="badge-type" id="res-type">Media</span>
               </div>
-              <h2 class="result-title" id="meta-title">Extracted Media</h2>
-              <p class="result-summary" id="meta-summary">Ready to download or convert.</p>
+              <h2 class="result-title" id="res-title">Content Detected</h2>
+              <p class="result-summary" id="res-summary">Ready to package.</p>
             </div>
-            <button type="button" class="btn-secondary" id="btn-reset-options">&#x2190; New Link</button>
+            <button type="button" class="btn-secondary" id="btn-reset-options">&#x2190; Back</button>
           </div>
 
-          <!-- Media Preview Card -->
-          <div class="media-preview-container" id="media-preview-container">
-            <img id="media-thumbnail" class="media-thumb" src="" alt="Media thumbnail" style="display:none">
-            <div class="media-info-text">
-              <div class="media-author" id="meta-author"></div>
-              <div class="media-description" id="meta-desc"></div>
-            </div>
-          </div>
+          <!-- Preview Area -->
+          <div class="preview-container" id="preview-container"></div>
 
-          <!-- Settings Row -->
+          <!-- Format Selection -->
+          <div class="format-section-title">Select Output Package Format</div>
+          <div class="format-cards-grid" id="format-cards-grid"></div>
+
+          <!-- Custom Settings -->
           <div class="settings-row">
-            <div class="form-group">
-              <label for="format-select" class="form-label">&#x1F3AC; Target Format</label>
-              <select id="format-select" class="form-select"></select>
+            <div class="setting-group" id="quality-setting-group" style="display:none">
+              <label class="setting-label" for="quality-select">Video Quality</label>
+              <select id="quality-select" class="styled-select"></select>
             </div>
-            <div class="form-group" id="quality-group">
-              <label for="quality-select" class="form-label">&#x2728; Quality</label>
-              <select id="quality-select" class="form-select">
-                <option value="best">Highest Available (Original)</option>
-                <option value="1080p">1080p Full HD</option>
-                <option value="720p">720p HD</option>
-                <option value="480p">480p Standard</option>
-              </select>
+            <div class="setting-group">
+              <label class="setting-label" for="custom-filename-input">Custom Filename (Optional)</label>
+              <input type="text" id="custom-filename-input" class="styled-input" placeholder="e.g. vacation_highlight">
+            </div>
+            <div class="setting-group" id="caption-setting-group" style="display:none;justify-content:flex-end">
+              <label class="caption-toggle-box">
+                <input type="checkbox" id="include-caption-checkbox">
+                <span class="caption-label-text">Include caption text file</span>
+              </label>
             </div>
           </div>
 
-          <!-- Download Action Button -->
-          <div class="download-action-bar">
-            <button type="button" class="btn-primary btn-large" id="btn-start-download">
-              Generate &amp; Download File &#x2193;
+          <!-- Download Action -->
+          <div style="text-align:center;margin-top:20px">
+            <button type="button" class="btn-primary" id="btn-start-download" style="min-width:240px;font-size:16px;padding:14px 32px">
+              &#x2193; Download File Now
             </button>
           </div>
         </div>
 
-        <!-- 4. Generation / Download Progress View -->
-        <div id="downloading-view" class="hidden">
-          <div class="loader-container">
-            <div class="spinner"></div>
-            <h3 class="loader-title" id="progress-title">Generating Your File...</h3>
-            <p class="loader-sub" id="progress-sub">Processing and packaging media on the server.</p>
-            <div class="progress-bar-wrapper">
-              <div class="progress-bar" id="download-progress-bar"></div>
-            </div>
-            <div class="progress-percent" id="download-progress-percent">0%</div>
-          </div>
+        <!-- 4. Downloading / Packaging View -->
+        <div id="downloading-view" class="loading-view hidden">
+          <div class="spinner-ring"></div>
+          <h3 class="loading-title">Packaging Your File...</h3>
+          <p class="loading-subtitle">Merging streams and building your high-speed package</p>
         </div>
 
-        <!-- 5. Success / Ready View -->
-        <div id="success-view" class="hidden">
-          <div class="success-card">
-            <div class="success-icon">&#x2705;</div>
-            <h3 class="success-title">Your File is Ready!</h3>
-            <p class="success-filename" id="ready-filename">media-file.mp4</p>
-            
-            <div class="success-actions">
-              <a href="#" class="btn-primary btn-large" id="direct-download-link" download>
-                &#x2193; Download File Now
-              </a>
-              <button type="button" class="btn-secondary" id="email-toggle-btn">
-                &#x2709;&#xFE0F; Send to Email
-              </button>
-            </div>
+        <!-- 5. Success View -->
+        <div id="success-view" class="success-view hidden">
+          <div class="success-badge-icon">&#x2713;</div>
+          <h2 class="success-title">Your File is Ready!</h2>
+          <p class="success-subtitle">Download your file directly or send it straight to your email inbox.</p>
 
-            <!-- Email Drawer -->
-            <div class="email-drawer" id="email-widget">
-              <div class="email-input-group">
-                <input type="email" id="email-recipient" class="email-input" placeholder="Enter your email address...">
-                <button type="button" class="btn-primary" id="email-send-btn">
-                  Attach &amp; Send
+          <div class="file-info-box">
+            <div class="file-info-row">
+              <span class="info-key">Filename</span>
+              <span class="info-value" id="success-filename">file</span>
+            </div>
+            <div class="file-info-row">
+              <span class="info-key">File Size</span>
+              <span class="info-value" id="success-filesize">0 MB</span>
+            </div>
+            <div class="file-info-row">
+              <span class="info-key">Format</span>
+              <span class="info-value" id="success-format">FILE</span>
+            </div>
+          </div>
+
+          <div class="success-actions">
+            <a href="#" class="btn-primary" id="direct-download-btn" style="padding:14px 28px;font-size:15px">
+              &#x2193; Direct Download
+            </a>
+            <button type="button" class="btn-secondary" id="btn-reset-success">
+              Download Another Link
+            </button>
+          </div>
+
+          <!-- Email Delivery Widget -->
+          <div class="email-delivery-widget" id="email-widget">
+            <div class="email-toggle-button" id="email-toggle-btn">
+              <span class="email-toggle-title">
+                <span>&#x2709;&#xFE0F;</span> Send this file to your email
+              </span>
+              <span class="email-toggle-arrow">&#x25BC;</span>
+            </div>
+            <div class="email-form-panel">
+              <div class="email-input-row">
+                <input
+                  type="email"
+                  class="email-input-field"
+                  id="email-input"
+                  placeholder="Enter your email address..."
+                  autocomplete="email"
+                >
+                <button type="button" class="email-send-button" id="email-send-btn">
+                  Send
                 </button>
               </div>
-              <div class="email-feedback" id="email-feedback"></div>
-            </div>
-
-            <div class="start-over-bar">
-              <button type="button" class="link-btn" id="btn-reset-success">&#x21BA; Download Another File</button>
+              <div class="email-status-message" id="email-status-message"></div>
             </div>
           </div>
         </div>
 
         <!-- 6. Error View -->
-        <div id="error-view" class="hidden">
-          <div class="error-card">
-            <div class="error-icon">&#x26A0;&#xFE0F;</div>
-            <h3 class="error-title">Extraction Error</h3>
-            <p class="error-message" id="error-message">Unable to extract media from this URL.</p>
-            <button type="button" class="btn-primary" id="btn-reset-error">&#x2190; Try Another Link</button>
-          </div>
+        <div id="error-view" class="error-view hidden">
+          <div class="error-badge-icon">&#x26A0;</div>
+          <h2 class="error-title">Could Not Process Link</h2>
+          <p class="error-message" id="error-message">
+            Unable to access or extract media from this URL. Please verify the link is public and accessible.
+          </p>
+          <button type="button" class="btn-primary" id="btn-reset-error" style="min-width:180px">
+            Try Another Link
+          </button>
         </div>
 
       </div>
