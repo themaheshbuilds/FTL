@@ -41,6 +41,14 @@ class Config:
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
+    # Email / SMTP Configuration
+    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER = os.getenv("SMTP_USER", "b3242412@gmail.com")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")
+    SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "LinkForge")
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+
     @classmethod
     def ensure_storage_dirs(cls) -> None:
         """Ensure temporary and generated storage directories exist."""

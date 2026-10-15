@@ -7,6 +7,7 @@ from routes.web import web_bp
 from routes.api import api_bp
 from routes.download import download_bp
 from routes.converter import converter_bp
+from routes.email import email_bp
 from utils.logging import setup_logging, get_logger
 
 logger = get_logger("linkforge.app")
@@ -42,6 +43,7 @@ def create_app(config_object=None) -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(download_bp)
     app.register_blueprint(converter_bp)
+    app.register_blueprint(email_bp)
 
     # Application-wide error handlers
     @app.errorhandler(404)

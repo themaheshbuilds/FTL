@@ -205,6 +205,29 @@
                             Convert Another
                         </button>
                     </div>
+
+                    <!-- Email File Directly to Mailbox -->
+                    <div class="email-delivery-wrapper" id="email-delivery-section">
+                        <button type="button" class="email-toggle-trigger" id="btn-toggle-email">
+                            <span>📧</span> Email This File to My Inbox
+                        </button>
+                        <div class="email-form-panel" id="email-form-panel" style="display: none;">
+                            <div class="email-input-group">
+                                <input 
+                                    type="email" 
+                                    class="email-text-input" 
+                                    id="email-recipient-input" 
+                                    placeholder="Enter your email (e.g. you@gmail.com)"
+                                    autocomplete="email"
+                                />
+                                <button type="button" class="email-send-action-btn" id="btn-send-email">
+                                    Send Email
+                                </button>
+                            </div>
+                            <div class="email-feedback-status" id="email-status-feedback" style="display: none;"></div>
+                        </div>
+                    </div>
+
                     <p class="expiry-notice">
                         ⏳ This temporary file will expire automatically in 30 minutes.
                     </p>

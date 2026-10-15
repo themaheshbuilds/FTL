@@ -18,6 +18,9 @@ def is_ip_private_or_reserved(ip_str: str) -> bool:
     """Check if an IP address string belongs to a private, loopback, or reserved range."""
     try:
         ip = ipaddress.ip_address(ip_str)
+        # RFC 6052: 64:ff9b::/96 is standard Well-Known Prefix for global IPv4/IPv6 Internet translation
+        if isinstance(ip, ipaddress.IPv6Address) and ip in ipaddress.IPv6Network("64:ff9b::/96"):
+            return False
         return (
             ip.is_private
             or ip.is_loopback

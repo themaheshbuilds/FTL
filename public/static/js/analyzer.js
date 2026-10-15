@@ -345,6 +345,7 @@ const Analyzer = {
 
     showSuccess(data) {
         this.hideAllSections();
+        this.currentFileId = data.file_id;
         const successCard = document.getElementById("success-card");
         document.getElementById("success-filename").textContent = data.filename || "download_file";
         
@@ -355,6 +356,23 @@ const Analyzer = {
         const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
         directBtn.href = downloadUrl;
         directBtn.setAttribute("download", data.filename || "download_file");
+
+        this.initEmailEvents();
+
+        // Reset email UI state
+        const emailPanel = document.getElementById("email-form-panel");
+        const emailStatus = document.getElementById("email-status-feedback");
+        const emailSendBtn = document.getElementById("btn-send-email");
+        if (emailPanel) emailPanel.style.display = "none";
+        if (emailStatus) {
+            emailStatus.style.display = "none";
+            emailStatus.className = "email-feedback-status";
+            emailStatus.textContent = "";
+        }
+        if (emailSendBtn) {
+            emailSendBtn.disabled = false;
+            emailSendBtn.innerHTML = `<span>Send Email</span>`;
+        }
 
         successCard.style.display = "block";
 
@@ -368,6 +386,103 @@ const Analyzer = {
             document.body.removeChild(dlLink);
         } catch (e) {
             console.warn("Auto-download trigger skipped:", e);
+        }
+    },
+
+    initEmailEvents() {
+        const toggleBtn = document.getElementById("btn-toggle-email");
+        const emailPanel = document.getElementById("email-form-panel");
+        const sendBtn = document.getElementById("btn-send-email");
+        const emailInput = document.getElementById("email-recipient-input");
+        const statusFeedback = document.getElementById("email-status-feedback");
+
+        if (toggleBtn && emailPanel && !toggleBtn.dataset.bound) {
+            toggleBtn.dataset.bound = "true";
+            toggleBtn.addEventListener("click", () => {
+                const isOpen = emailPanel.style.display !== "none";
+                emailPanel.style.display = isOpen ? "none" : "block";
+                if (!isOpen && emailInput) {
+                    emailInput.focus();
+                }
+            });
+        }
+
+        if (sendBtn && emailInput && !sendBtn.dataset.bound) {
+            sendBtn.dataset.bound = "true";
+            const handleSend = async () => {
+                const email = emailInput.value.trim();
+                if (!email) {
+                    if (statusFeedback) {
+                        statusFeedback.className = "email-feedback-status error";
+                        statusFeedback.textContent = "Please enter your recipient email address.";
+                        statusFeedback.style.display = "block";
+                    }
+                    emailInput.focus();
+                    return;
+                }
+
+                if (!this.currentFileId) {
+                    if (statusFeedback) {
+                        statusFeedback.className = "email-feedback-status error";
+                        statusFeedback.textContent = "File session not found. Please re-download.";
+                        statusFeedback.style.display = "block";
+                    }
+                    return;
+                }
+
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = `<span>Sending...</span>`;
+                if (statusFeedback) {
+                    statusFeedback.className = "email-feedback-status loading";
+                    statusFeedback.textContent = "Connecting to email server and delivering your file...";
+                    statusFeedback.style.display = "block";
+                }
+
+                try {
+                    const response = await fetch("/api/send-email", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            file_id: this.currentFileId,
+                            email: email
+                        })
+                    });
+                    const resJson = await response.json();
+
+                    if (!response.ok || !resJson.success) {
+                        const errMsg = (resJson.error && resJson.error.message) || resJson.message || "Failed to send email.";
+                        if (statusFeedback) {
+                            statusFeedback.className = "email-feedback-status error";
+                            statusFeedback.textContent = errMsg;
+                            statusFeedback.style.display = "block";
+                        }
+                    } else {
+                        if (statusFeedback) {
+                            statusFeedback.className = "email-feedback-status success";
+                            statusFeedback.textContent = resJson.message || `✓ File successfully sent to ${email}!`;
+                            statusFeedback.style.display = "block";
+                        }
+                        emailInput.value = "";
+                    }
+                } catch (e) {
+                    if (statusFeedback) {
+                        statusFeedback.className = "email-feedback-status error";
+                        statusFeedback.textContent = "Network error connecting to email service. Please try again.";
+                        statusFeedback.style.display = "block";
+                    }
+                } finally {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = `<span>Send Email</span>`;
+                }
+            };
+
+            sendBtn.addEventListener("click", handleSend);
+            emailInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSend();
+                }
+            });
         }
     },
 

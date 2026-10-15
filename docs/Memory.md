@@ -341,4 +341,23 @@ pytest -v
   3. Matroska container packaging (`remux_video` in `utils/ffmpeg_helper.py`) losslessly remuxes via `-c copy` (<0.1s), delivering genuine MKV files (`video/x-matroska`). If `ffmpeg` is missing, resilient copy fallback preserves the target container extension (`.mkv`).
   4. Frontend UI (`static/js/analyzer.js` and `public/static/js/analyzer.js`) now dynamically parses and displays dedicated format extension badges (e.g., `Video` + `.mp4`, `Matroska Video` + `.mkv`, `WebM Video` + `.webm`, `Audio Track` + `.mp3`, `PDF Document` + `.pdf`, `ZIP Archive` + `.zip`) styled with `.format-btn-ext` badge pill tokens.
 
+---
+
+# 11. Email Delivery Architecture & Gmail SMTP Setup
+
+### 1. Delivery Flow & Attachment Strategy
+- **Endpoint:** `POST /api/send-email` (accepts `file_id` and recipient `email`).
+- **File Size Handling:**
+  - **Files ≤ 25 MB:** Directly attached to the email as an email attachment (`MIMEApplication`), allowing users to open and save the file directly in their email client (Gmail, Outlook, Apple Mail).
+  - **Files > 25 MB:** Email clients enforce a strict 25 MB attachment limit. Large files include a prominent, high-contrast **Direct 1-Click Download Button** linking to `{base_url}/download/{file_id}`, preventing bounce errors.
+- **Rate Limiting & Security:** In-memory rate limiting enforces a maximum of 5 emails per minute per client IP to mitigate spam. Email inputs are strictly validated against RFC regex.
+
+### 2. Gmail SMTP & 16-Character App Password Configuration
+- Standard Google account passwords cannot authenticate directly via SMTP since Google disabled "Less secure apps".
+- To authenticate `b3242412@gmail.com`:
+  1. Go to Google Account Settings -> Security -> 2-Step Verification.
+  2. Generate a 16-character **App Password** for "LinkForge".
+  3. Store in `.env` as `SMTP_PASSWORD=xxxx xxxx xxxx xxxx` (and in Vercel Environment Variables).
+
+
 

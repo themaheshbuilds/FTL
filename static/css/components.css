@@ -643,6 +643,136 @@
     margin-bottom: 1.25rem;
 }
 
+/* Email Delivery Section */
+.email-delivery-wrapper {
+    margin: 0 auto 1.25rem;
+    max-width: 440px;
+    width: 100%;
+}
+
+.email-toggle-trigger {
+    background: transparent;
+    color: var(--brand-primary);
+    border: 1px dashed var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 0.65rem 1.2rem;
+    font-family: var(--font-sans);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    transition: all var(--transition-fast);
+}
+
+.email-toggle-trigger:hover {
+    border-color: var(--brand-primary);
+    background: var(--brand-light);
+    transform: translateY(-1px);
+}
+
+.email-form-panel {
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-top: 0.75rem;
+    animation: fadeInSlide 0.25s ease-out;
+}
+
+.email-input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.email-text-input {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.85rem;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.email-text-input:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.email-send-action-btn {
+    background: var(--brand-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all var(--transition-fast);
+}
+
+.email-send-action-btn:hover:not(:disabled) {
+    background: var(--brand-dark);
+    transform: translateY(-1px);
+}
+
+.email-send-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.email-feedback-status {
+    margin-top: 0.75rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.84rem;
+    text-align: left;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.email-feedback-status.success {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.email-feedback-status.error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.email-feedback-status.loading {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--brand-primary);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .download-action-btn {
     background-color: var(--accent-emerald);
 }

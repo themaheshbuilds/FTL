@@ -62,6 +62,7 @@ Link to File Downloader/
 │   ├── api.py                 # POST /api/analyze & POST /api/generate (Link Downloader)
 │   ├── converter.py           # POST /api/convert (Universal File Converter)
 │   ├── download.py            # GET /download/<file_id> (Temporary file delivery)
+│   ├── email.py               # POST /api/send-email (Direct email delivery)
 │   ├── health.py              # GET /health (Heartbeat probe)
 │   └── web.py                 # GET / (Single-page application render)
 │
@@ -71,6 +72,7 @@ Link to File Downloader/
 │   ├── cleanup_service.py     # Temporary storage garbage collection & file expiration
 │   ├── converter_service.py   # Multi-format conversion engines (PDF, DOCX, Media, Images)
 │   ├── docx_service.py        # Word document assembly (.docx)
+│   ├── email_service.py       # Email delivery via Gmail SMTP & Resend API
 │   ├── extraction_service.py  # Dispatcher routing URLs to matching extractors
 │   ├── generic_downloader.py  # Streamed direct HTTP downloader & OpenGraph scraper
 │   ├── job_service.py         # Job creation, state management & registry
