@@ -30,7 +30,8 @@ class MediaService:
         output_format: str,
         quality: str = "best",
         custom_filename: Optional[str] = None,
-        include_caption: bool = False
+        include_caption: bool = False,
+        selected_indices: Optional[List[int]] = None
     ) -> Tuple[bool, Optional[str], Optional[str], Optional[str], Optional[int], Optional[str]]:
         """Process and package media based on user's requested output format and options.
         
@@ -41,6 +42,13 @@ class MediaService:
         analysis = UrlAnalyzer.analyze_url(url)
         if not analysis.success:
             return False, None, None, None, None, analysis.error_message
+
+        # Filter items if user selected specific ones
+        target_items = list(analysis.items)
+        if selected_indices is not None and isinstance(selected_indices, list) and len(selected_indices) > 0:
+            filtered = [analysis.items[i] for i in selected_indices if 0 <= i < len(analysis.items)]
+            if filtered:
+                target_items = filtered
 
         # Determine clean base filename without extensions
         raw_base = (custom_filename or "").strip()
@@ -59,7 +67,7 @@ class MediaService:
 
             # --- CASE A: PDF from images / documents ---
             if format_lower in ("pdf", "images_pdf"):
-                downloaded_image_paths = cls._download_items_to_dir(analysis.items, str(temp_dir), filter_type="image")
+                downloaded_image_paths = cls._download_items_to_dir(target_items, str(temp_dir), filter_type="image")
                 if not downloaded_image_paths:
                     return False, None, None, None, None, "No downloadable images found to convert to PDF."
 
@@ -82,7 +90,7 @@ class MediaService:
 
             # --- CASE B: Microsoft Word (.docx / .doc) ---
             if format_lower in ("doc", "docx", "word"):
-                downloaded_image_paths = cls._download_items_to_dir(analysis.items, str(temp_dir), filter_type="image")
+                downloaded_image_paths = cls._download_items_to_dir(target_items, str(temp_dir), filter_type="image")
                 if not downloaded_image_paths:
                     return False, None, None, None, None, "No downloadable images found to convert to Word Document."
 
@@ -105,9 +113,9 @@ class MediaService:
                 return True, job.job_id, docx_name, docx_mime, fsize, None
 
             # --- CASE C: ZIP Archive ---
-            if format_lower in ("zip", "images_zip", "all_zip") or (format_lower == "images" and len(analysis.items) > 1):
+            if format_lower in ("zip", "images_zip", "all_zip") or (format_lower == "images" and len(target_items) > 1):
                 filter_type = "image" if format_lower in ("images_zip", "images") else None
-                downloaded_paths = cls._download_items_to_dir(analysis.items, str(temp_dir), filter_type=filter_type)
+                downloaded_paths = cls._download_items_to_dir(target_items, str(temp_dir), filter_type=filter_type)
                 if not downloaded_paths:
                     return False, None, None, None, None, "No downloadable media found to package into ZIP."
 
@@ -143,16 +151,24 @@ class MediaService:
                 target_format = "audio" if is_audio else quality
                 downloaded_file: Optional[str] = None
 
-                # 1. For Instagram videos/audio, try direct fast download of progressive stream first
-                if analysis.platform == "Instagram" and analysis.items and format_lower in ("mp4", "mkv", "webm", "video", "audio", "mp3", "m4a"):
-                    target_item = next((item for item in analysis.items if item.media_type in ("video", "audio")), analysis.items[0])
-                    if target_item and target_item.url and target_item.url.startswith("http"):
-                        logger.info(f"Directly fetching Instagram progressive video stream: {target_item.filename}")
-                        ok, dpath, err = GenericDownloader.download_file(target_item.url, str(temp_dir), target_item.filename)
-                        if ok and dpath and os.path.exists(dpath) and os.path.getsize(dpath) > 100_000:
+                # 1. Check if an explicit audio item was detected in target_items (e.g., Instagram music track)
+                if is_audio:
+                    audio_item = next((it for it in target_items if it.media_type == "audio"), None)
+                    if audio_item and audio_item.url:
+                        ok, dpath, err = GenericDownloader.download_file(audio_item.url, str(temp_dir), audio_item.filename)
+                        if ok and dpath and os.path.exists(dpath):
                             downloaded_file = dpath
 
-                # 2. Try yt-dlp if not already downloaded
+                # 2. For Instagram videos, try direct fast download of progressive stream first
+                if not downloaded_file and analysis.platform == "Instagram" and target_items:
+                    target_item = next((item for item in target_items if item.media_type in ("video", "audio")), target_items[0])
+                    if target_item and target_item.url and target_item.url.startswith("http"):
+                        logger.info(f"Directly fetching Instagram progressive stream: {target_item.filename}")
+                        ok, dpath, err = GenericDownloader.download_file(target_item.url, str(temp_dir), target_item.filename)
+                        if ok and dpath and os.path.exists(dpath) and os.path.getsize(dpath) > 50_000:
+                            downloaded_file = dpath
+
+                # 3. Try yt-dlp if not already downloaded
                 if not downloaded_file or not os.path.exists(downloaded_file):
                     downloaded_file = YtDlpService.download_media(
                         url,
@@ -160,16 +176,16 @@ class MediaService:
                         format_filter=target_format
                     )
 
-                # 3. Fallback to direct download of media item stream if yt-dlp did not download
+                # 4. Fallback to direct download of media item stream if yt-dlp did not download
                 if not downloaded_file or not os.path.exists(downloaded_file):
-                    if analysis.items:
-                        target_item = next((item for item in analysis.items if item.media_type in ("video", "audio")), analysis.items[0])
+                    if target_items:
+                        target_item = next((item for item in target_items if item.media_type in ("video", "audio")), target_items[0])
                         ok, dpath, err = GenericDownloader.download_file(target_item.url, str(temp_dir), target_item.filename)
                         if ok and dpath and os.path.exists(dpath):
                             downloaded_file = dpath
 
                 if not downloaded_file or not os.path.exists(downloaded_file):
-                    return False, None, None, None, None, "Could not extract or download this video. It may be restricted or unsupported."
+                    return False, None, None, None, None, "Could not extract or download this media. It may be restricted or unsupported."
 
                 # If Audio was requested:
                 if is_audio:
@@ -224,9 +240,24 @@ class MediaService:
                 JobService.update_job_success(job.job_id, final_path, final_name, mime, fsize)
                 return True, job.job_id, final_name, mime, fsize, None
 
-            # --- CASE E: Original / Direct File ---
-            if analysis.items:
-                target_item = analysis.items[0]
+            # --- CASE E: Original / Single / Direct File ---
+            if target_items:
+                if len(target_items) > 1 and format_lower in ("original", "images", "all", "default"):
+                    # Multi-item collection: package ALL items into a ZIP so no item is dropped!
+                    downloaded_paths = cls._download_items_to_dir(target_items, str(temp_dir))
+                    if not downloaded_paths:
+                        return False, None, None, None, None, "Failed to download media collection."
+                    files_to_zip = [(p, os.path.basename(p)) for p in downloaded_paths]
+                    zip_name = f"{safe_base}.zip"
+                    out_zip_path = str(gen_dir / zip_name)
+                    ok = ArchiveService.create_zip(files_to_zip, out_zip_path)
+                    if ok and os.path.exists(out_zip_path):
+                        fsize = os.path.getsize(out_zip_path)
+                        JobService.update_job_success(job.job_id, out_zip_path, zip_name, "application/zip", fsize)
+                        return True, job.job_id, zip_name, "application/zip", fsize, None
+
+                # Single item direct download
+                target_item = target_items[0]
                 orig_ext = os.path.splitext(target_item.filename)[1] if target_item.filename else ""
                 final_name = f"{safe_base}{orig_ext}" if orig_ext else (target_item.filename or "download_file")
                 ok, dpath, err = GenericDownloader.download_file(target_item.url, str(gen_dir), final_name)

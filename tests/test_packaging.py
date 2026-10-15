@@ -171,3 +171,93 @@ def test_media_service_mkv_packaging(tmp_path):
             assert size is not None and size > 0
 
 
+def test_process_and_package_selected_indices_zip(tmp_path):
+    """Test packaging only selected images into a ZIP archive."""
+    from unittest.mock import patch
+    from models.result import AnalysisResult
+    from models.media import MediaItem
+    from services.media_service import MediaService
+
+    img1 = tmp_path / "img1.jpg"
+    img2 = tmp_path / "img2.jpg"
+    img3 = tmp_path / "img3.jpg"
+    img1.write_bytes(b"JPEGDATA1")
+    img2.write_bytes(b"JPEGDATA2")
+    img3.write_bytes(b"JPEGDATA3")
+
+    items = [
+        MediaItem(url="https://example.com/1.jpg", media_type="image", filename="img1.jpg"),
+        MediaItem(url="https://example.com/2.jpg", media_type="image", filename="img2.jpg"),
+        MediaItem(url="https://example.com/3.jpg", media_type="image", filename="img3.jpg"),
+    ]
+    fake_result = AnalysisResult(
+        success=True,
+        platform="Instagram",
+        content_type="image_collection",
+        media_count=3,
+        items=items,
+        title="Carousel Post"
+    )
+
+    def fake_download(url, target_dir, filename):
+        if "1.jpg" in url:
+            return True, str(img1), None
+        if "2.jpg" in url:
+            return True, str(img2), None
+        if "3.jpg" in url:
+            return True, str(img3), None
+        return False, None, "error"
+
+    with patch("services.url_analyzer.UrlAnalyzer.analyze_url", return_value=fake_result):
+        with patch("services.generic_downloader.GenericDownloader.download_file", side_effect=fake_download):
+            # User only selects items #1 and #3 (indices 0 and 2)
+            ok, job_id, filename, mime, size, err = MediaService.process_and_package(
+                url="https://www.instagram.com/p/test/",
+                output_format="zip",
+                selected_indices=[0, 2]
+            )
+
+            assert ok is True, f"Packaging failed: {err}"
+            assert filename.endswith(".zip")
+            assert mime == "application/zip"
+
+
+def test_process_and_package_multi_item_original_defaults_to_zip(tmp_path):
+    """Test that requesting 'original' on a multi-item carousel produces a ZIP containing all items."""
+    from unittest.mock import patch
+    from models.result import AnalysisResult
+    from models.media import MediaItem
+    from services.media_service import MediaService
+
+    img1 = tmp_path / "a.jpg"
+    img2 = tmp_path / "b.jpg"
+    img1.write_bytes(b"A")
+    img2.write_bytes(b"B")
+
+    items = [
+        MediaItem(url="https://example.com/a.jpg", media_type="image", filename="a.jpg"),
+        MediaItem(url="https://example.com/b.jpg", media_type="image", filename="b.jpg"),
+    ]
+    fake_result = AnalysisResult(
+        success=True,
+        platform="Instagram",
+        content_type="image_collection",
+        media_count=2,
+        items=items,
+        title="Photo Set"
+    )
+
+    with patch("services.url_analyzer.UrlAnalyzer.analyze_url", return_value=fake_result):
+        with patch("services.generic_downloader.GenericDownloader.download_file", return_value=(True, str(img1), None)):
+            ok, job_id, filename, mime, size, err = MediaService.process_and_package(
+                url="https://www.instagram.com/p/photoset/",
+                output_format="original"
+            )
+
+            assert ok is True
+            # Since multiple items exist, it packages into a ZIP instead of dropping item #2!
+            assert filename.endswith(".zip")
+            assert mime == "application/zip"
+
+
+

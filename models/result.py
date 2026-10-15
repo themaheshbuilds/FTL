@@ -28,6 +28,10 @@ class AnalysisResult:
                 }
             }
 
+        images = [item.to_dict() for item in self.items if item.media_type == "image"]
+        videos = [item.to_dict() for item in self.items if item.media_type == "video"]
+        audios = [item.to_dict() for item in self.items if item.media_type == "audio"]
+
         return {
             "success": True,
             "platform": self.platform,
@@ -38,4 +42,10 @@ class AnalysisResult:
             "title": self.title,
             "description": self.description,
             "items": [item.to_dict() for item in self.items],
+            "images": images,
+            "videos": videos,
+            "audios": audios,
+            "has_images": len(images) > 0,
+            "has_videos": len(videos) > 0,
+            "has_audios": len(audios) > 0,
         }

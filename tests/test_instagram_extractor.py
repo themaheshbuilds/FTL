@@ -134,6 +134,8 @@ def test_instagram_video_progressive_selection():
         res = extractor.analyze("https://www.instagram.com/reel/reel_test/")
         assert res.success is True
         assert res.content_type == "video"
-        assert res.media_count == 1
+        assert res.media_count == 2
         # MUST select progressive video, NOT the audio-only dash stream!
         assert res.items[0].url == "https://cdn.example.com/progressive_video.mp4"
+        assert res.items[0].media_type == "video"
+        assert res.items[1].media_type == "audio"

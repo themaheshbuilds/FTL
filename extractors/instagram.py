@@ -100,19 +100,41 @@ class InstagramExtractor(BaseExtractor):
         title = info.get("title") or "Instagram Media"
         description = info.get("description")
         entries = info.get("entries")
+        if entries is not None and not isinstance(entries, list):
+            try:
+                entries = list(entries)
+            except Exception:
+                entries = []
 
-        if entries and isinstance(entries, list):
+        if not entries:
+            # Check direct carousel_media or edge_sidecar_to_children
+            raw_carousel = info.get("carousel_media") or info.get("edge_sidecar_to_children")
+            if raw_carousel:
+                if isinstance(raw_carousel, dict) and "edges" in raw_carousel:
+                    entries = [edge.get("node") for edge in raw_carousel.get("edges", []) if edge.get("node")]
+                elif isinstance(raw_carousel, list):
+                    entries = raw_carousel
+
+        if entries and isinstance(entries, list) and len(entries) > 0:
             items: List[MediaItem] = []
             previews: List[str] = []
             has_videos = False
             has_images = False
 
             for idx, entry in enumerate(entries):
-                if not entry:
+                if not entry or not isinstance(entry, dict):
                     continue
-                entry_id = entry.get("id") or f"media_{idx + 1}"
+                entry_id = entry.get("id") or entry.get("pk") or f"media_{idx + 1}"
                 formats = entry.get("formats") or []
                 thumbnails = entry.get("thumbnails") or []
+
+                # Fallback for raw Instagram product media dictionaries
+                if not formats and entry.get("video_versions"):
+                    formats = entry.get("video_versions")
+                if not thumbnails and entry.get("image_versions2"):
+                    cands = entry.get("image_versions2", {}).get("candidates", [])
+                    thumbnails = [{"url": c.get("url")} for c in cands if c.get("url")]
+
                 is_video = bool(formats)
 
                 if is_video:
@@ -125,7 +147,7 @@ class InstagramExtractor(BaseExtractor):
                 else:
                     has_images = True
                     # The last thumbnail in yt-dlp candidates is the highest resolution original image
-                    direct_url = thumbnails[-1].get("url") if thumbnails else None
+                    direct_url = thumbnails[-1].get("url") if thumbnails else (entry.get("display_url") or entry.get("url"))
                     ext = "jpg"
                     mime = "image/jpeg"
                     media_type = "image"
@@ -152,12 +174,46 @@ class InstagramExtractor(BaseExtractor):
             if not items:
                 return None
 
+            # Detect background music / audio track in carousel
+            music_info = info.get("music_info") or info.get("clips_metadata") or {}
+            audio_url = None
+            audio_title = None
+            if isinstance(music_info, dict):
+                asset = music_info.get("music_asset_info") or music_info.get("audio_type_model") or music_info
+                audio_url = asset.get("progressive_download_url") or asset.get("audio_url") or music_info.get("audio_url")
+                raw_title = asset.get("title") or asset.get("song_name") or "Instagram Audio Track"
+                artist = asset.get("display_artist") or asset.get("artist_name") or ""
+                audio_title = f"{artist} - {raw_title}" if artist else raw_title
+
+            if audio_url:
+                items.append(MediaItem(
+                    url=audio_url,
+                    media_type="audio",
+                    filename=sanitize_filename(f"{audio_title or 'audio_track'}.mp3"),
+                    mime_type="audio/mpeg",
+                    title=audio_title or "Background Audio Track",
+                    thumbnail_url=previews[0] if previews else None
+                ))
+            elif has_videos:
+                # Add audio track derived from the first video
+                primary_video = next((it for it in items if it.media_type == "video"), None)
+                if primary_video:
+                    items.append(MediaItem(
+                        url=primary_video.url,
+                        media_type="audio",
+                        filename=sanitize_filename(f"{title}_audio.mp3"),
+                        mime_type="audio/mpeg",
+                        title=f"{title} (Audio Track)",
+                        thumbnail_url=primary_video.thumbnail_url,
+                        duration=primary_video.duration
+                    ))
+
             if has_videos and has_images:
                 content_type = "mixed"
-                available_formats = ["zip", "mp4", "mkv", "images_pdf", "images_zip"]
+                available_formats = ["zip", "mp4", "mkv", "images_pdf", "images_zip", "audio", "mp3"]
             elif has_videos:
                 content_type = "video_collection"
-                available_formats = ["zip", "mp4", "mkv"]
+                available_formats = ["zip", "mp4", "mkv", "audio", "mp3"]
             else:
                 content_type = "image_collection"
                 available_formats = ["pdf", "docx", "zip", "images"]
@@ -186,35 +242,75 @@ class InstagramExtractor(BaseExtractor):
                 ext = "mp4"
                 mime = "video/mp4"
                 thumb = thumbnails[-1].get("url") if thumbnails else None
-                available_formats = ["mp4", "mkv", "webm", "audio", "m4a"]
+                available_formats = ["mp4", "mkv", "webm", "audio", "mp3", "m4a"]
+
+                if not direct_url:
+                    return None
+
+                video_item = MediaItem(
+                    url=direct_url,
+                    media_type="video",
+                    filename=sanitize_filename(f"{entry_id}.{ext}"),
+                    mime_type=mime,
+                    title=title,
+                    thumbnail_url=thumb,
+                    duration=info.get("duration")
+                )
+
+                # Check for music info in single video/reel
+                music_info = info.get("music_info") or info.get("clips_metadata") or {}
+                audio_url = None
+                audio_title = None
+                if isinstance(music_info, dict):
+                    asset = music_info.get("music_asset_info") or music_info.get("audio_type_model") or music_info
+                    audio_url = asset.get("progressive_download_url") or asset.get("audio_url") or music_info.get("audio_url")
+                    raw_title = asset.get("title") or asset.get("song_name") or "Instagram Audio Track"
+                    artist = asset.get("display_artist") or asset.get("artist_name") or ""
+                    audio_title = f"{artist} - {raw_title}" if artist else raw_title
+
+                audio_item = MediaItem(
+                    url=audio_url or direct_url,
+                    media_type="audio",
+                    filename=sanitize_filename(f"{audio_title or entry_id}_audio.mp3"),
+                    mime_type="audio/mpeg",
+                    title=audio_title or f"{title} (Audio Track)",
+                    thumbnail_url=thumb,
+                    duration=info.get("duration")
+                )
+
+                items = [video_item, audio_item]
+                previews = [thumb] if thumb else []
             else:
                 content_type = "image"
-                direct_url = thumbnails[-1].get("url") if thumbnails else None
+                direct_url = thumbnails[-1].get("url") if thumbnails else (info.get("display_url") or info.get("url"))
                 ext = "jpg"
                 mime = "image/jpeg"
                 thumb = thumbnails[0].get("url") if thumbnails else direct_url
                 available_formats = ["original", "pdf", "docx", "zip"]
 
-            if not direct_url:
-                return None
+                if not direct_url:
+                    return None
 
-            item = MediaItem(
-                url=direct_url,
-                media_type=content_type,
-                filename=sanitize_filename(f"{entry_id}.{ext}"),
-                mime_type=mime,
-                title=title,
-                thumbnail_url=thumb,
-                duration=info.get("duration")
-            )
+                item = MediaItem(
+                    url=direct_url,
+                    media_type="image",
+                    filename=sanitize_filename(f"{entry_id}.{ext}"),
+                    mime_type=mime,
+                    title=title,
+                    thumbnail_url=thumb,
+                    duration=info.get("duration")
+                )
+                items = [item]
+                previews = [thumb] if thumb else []
+
             return AnalysisResult(
                 success=True,
                 platform="Instagram",
                 content_type=content_type,
-                media_count=1,
+                media_count=len(items),
                 formats=available_formats,
-                items=[item],
-                previews=[thumb] if thumb else [],
+                items=items,
+                previews=previews,
                 title=title,
                 description=description
             )

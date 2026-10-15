@@ -1,6 +1,7 @@
 /**
- * LinkForge - Link Downloader Controller
- * Handles URL analysis, format configuration, file generation, and email delivery.
+ * LinkForge - Advanced Link Downloader Controller
+ * Handles URL analysis, multi-item carousels, segregated media sections (Images, Videos, Music),
+ * selective bulk actions (ZIP, PDF, DOCX), individual downloads, and email delivery.
  */
 
 const DownloaderApp = {
@@ -55,7 +56,7 @@ const DownloaderApp = {
                         }
                     }
                 } catch (e) {
-                    console.warn("Clipboard access denied or unavailable", e);
+                    console.warn("Clipboard access denied", e);
                     urlInput.focus();
                 }
             });
@@ -83,10 +84,15 @@ const DownloaderApp = {
             });
         }
 
-        // Start generation / download
+        // Global start generation / download button
         if (btnStartDownload) {
             btnStartDownload.addEventListener("click", () => {
-                this.startDownload();
+                // If there are multiple images, gather selected image indices
+                const selected = this.getSelectedImageIndices();
+                this.startDownload({
+                    format: this.selectedFormat,
+                    selected_indices: selected.length > 0 ? selected : null
+                });
             });
         }
 
@@ -95,7 +101,7 @@ const DownloaderApp = {
         if (btnResetSuccess) btnResetSuccess.addEventListener("click", () => this.resetToHome());
         if (btnResetError) btnResetError.addEventListener("click", () => this.showView("input-view"));
 
-        // Email delivery toggle
+        // Email delivery widget
         const emailToggle = document.getElementById("email-toggle-btn");
         const emailWidget = document.getElementById("email-widget");
         const emailSendBtn = document.getElementById("email-send-btn");
@@ -112,7 +118,6 @@ const DownloaderApp = {
             });
         }
 
-        // Modal triggers
         this.initModals();
     },
 
@@ -161,7 +166,6 @@ const DownloaderApp = {
         this.currentUrl = url;
         this.showView("loading-view");
 
-        // Animated step simulation for smooth feedback
         const stepPlatform = document.getElementById("step-platform");
         const stepContent = document.getElementById("step-content");
         const stepMedia = document.getElementById("step-media");
@@ -214,8 +218,13 @@ const DownloaderApp = {
         }
     },
 
+    getSelectedImageIndices() {
+        const checkboxes = document.querySelectorAll(".img-select-check:checked");
+        return Array.from(checkboxes).map(cb => parseInt(cb.getAttribute("data-index"), 10)).filter(n => !isNaN(n));
+    },
+
     renderOptions(data) {
-        // Badges and Meta
+        // Badges & Meta
         const platformBadge = document.getElementById("res-platform");
         const typeBadge = document.getElementById("res-type");
         const titleEl = document.getElementById("res-title");
@@ -224,112 +233,331 @@ const DownloaderApp = {
         if (platformBadge) platformBadge.textContent = data.platform || "Direct Web";
         if (typeBadge) typeBadge.textContent = (data.content_type || "Media").replace(/_/g, " ");
 
-        const count = data.media_count || 1;
+        // Partition items into images, videos, audios
+        const items = data.items || [];
+        const images = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type === "image");
+        const videos = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type === "video");
+        const audios = items.map((it, idx) => ({ ...it, origIndex: idx })).filter(it => it.media_type === "audio");
+
         if (titleEl) {
-            if (count > 1) {
-                titleEl.textContent = `${data.platform || "Platform"} Collection (${count} Items)`;
-            } else {
-                titleEl.textContent = data.title || `${data.platform || "Media"} Download`;
-            }
+            titleEl.textContent = data.title || `${data.platform || "Media"} Download`;
         }
 
         if (summaryEl) {
-            if (count > 1) {
-                summaryEl.textContent = `All ${count} items detected and ready to be packaged in your preferred format.`;
-            } else {
-                summaryEl.textContent = "1 item ready to download. Select your format options below.";
-            }
+            const parts = [];
+            if (images.length > 0) parts.push(`${images.length} Image${images.length > 1 ? "s" : ""}`);
+            if (videos.length > 0) parts.push(`${videos.length} Video${videos.length > 1 ? "s" : ""}`);
+            if (audios.length > 0) parts.push(`${audios.length} Audio Track`);
+            summaryEl.textContent = parts.length > 0 ? parts.join(" • ") + " detected." : "Ready to package and download.";
         }
 
-        // Previews
+        // Segregated Media Container
         const previewContainer = document.getElementById("preview-container");
         if (previewContainer) {
             previewContainer.innerHTML = "";
-            if (Array.isArray(data.previews) && data.previews.length > 0) {
-                if (data.previews.length === 1) {
-                    const box = document.createElement("div");
-                    box.className = "single-preview-box";
-                    const img = document.createElement("img");
-                    img.src = data.previews[0];
-                    img.alt = "Media preview";
-                    img.loading = "lazy";
-                    box.appendChild(img);
-                    previewContainer.appendChild(box);
-                } else {
-                    const header = document.createElement("div");
-                    header.className = "preview-grid-header";
-                    header.innerHTML = `
-                        <span class="preview-count-pill">${data.previews.length} Items Detected</span>
-                        <button type="button" class="preview-toggle-btn" id="toggle-previews">Show all</button>
+
+            // 1. IMAGES SECTION
+            if (images.length > 0) {
+                const imgSection = document.createElement("div");
+                imgSection.className = "media-seg-section";
+                imgSection.innerHTML = `
+                    <div class="media-seg-header">
+                        <div class="media-seg-title">
+                            <span>&#x1F5BC;&#xFE0F;</span> Images (${images.length})
+                        </div>
+                        <div class="media-seg-controls">
+                            <label class="select-all-label">
+                                <input type="checkbox" id="select-all-images" checked>
+                                <span>Select All</span>
+                            </label>
+                            <span class="selection-pill" id="images-selected-pill">${images.length} of ${images.length} selected</span>
+                        </div>
+                    </div>
+
+                    ${images.length > 1 ? `
+                    <div class="batch-action-bar">
+                        <button type="button" class="batch-btn batch-zip" id="btn-batch-zip">
+                            &#x1F4E6; Download Selected (ZIP)
+                        </button>
+                        <button type="button" class="batch-btn batch-pdf" id="btn-batch-pdf">
+                            &#x1F4C4; Convert Selected to PDF
+                        </button>
+                        <button type="button" class="batch-btn batch-docx" id="btn-batch-docx">
+                            &#x1F4DD; Convert Selected to DOCX
+                        </button>
+                    </div>
+                    ` : ''}
+
+                    <div class="images-collection-grid" id="images-collection-grid"></div>
+                `;
+
+                previewContainer.appendChild(imgSection);
+
+                // Render image cards
+                const grid = imgSection.querySelector("#images-collection-grid");
+                images.forEach((img, i) => {
+                    const card = document.createElement("div");
+                    card.className = "image-item-card selected";
+                    card.setAttribute("data-index", img.origIndex);
+                    const thumbUrl = img.thumbnail_url || img.url;
+
+                    card.innerHTML = `
+                        <div class="image-card-top">
+                            <label class="image-checkbox-wrapper" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="img-select-check" data-index="${img.origIndex}" checked>
+                                <span class="checkbox-custom"></span>
+                            </label>
+                            <span class="image-index-badge">#${i + 1}</span>
+                        </div>
+                        <div class="image-thumb-wrapper" title="Click to view full image">
+                            <img src="${thumbUrl}" alt="Photo ${i + 1}" loading="lazy">
+                            <div class="image-zoom-overlay"><span>&#x1F50D; Preview</span></div>
+                        </div>
+                        <div class="image-card-actions">
+                            <button type="button" class="btn-single-image-dl" data-index="${img.origIndex}" title="Download this single image">
+                                &#x2193; Download
+                            </button>
+                        </div>
                     `;
-                    previewContainer.appendChild(header);
 
-                    const grid = document.createElement("div");
-                    grid.className = "preview-grid";
+                    // Click checkbox toggles selection
+                    const cb = card.querySelector(".img-select-check");
+                    cb.addEventListener("change", () => {
+                        card.classList.toggle("selected", cb.checked);
+                        this.updateImagesSelectedCounter(images.length);
+                    });
 
-                    const renderGrid = (limit) => {
-                        grid.innerHTML = "";
-                        const list = limit ? data.previews.slice(0, limit) : data.previews;
-                        list.forEach((url, i) => {
-                            const item = document.createElement("div");
-                            item.className = "preview-grid-item";
-                            item.innerHTML = `
-                                <img src="${url}" alt="Item ${i + 1}" loading="lazy">
-                                <span class="page-badge">#${i + 1}</span>
-                            `;
-                            grid.appendChild(item);
+                    // Click thumbnail opens image in full modal/lightbox
+                    const thumb = card.querySelector(".image-thumb-wrapper");
+                    thumb.addEventListener("click", () => {
+                        this.openImageLightbox(img.url || thumbUrl, `Image #${i + 1}`);
+                    });
+
+                    // Single image download button
+                    const dlBtn = card.querySelector(".btn-single-image-dl");
+                    dlBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        this.startDownload({
+                            format: "original",
+                            selected_indices: [img.origIndex],
+                            custom_filename: `image_${i + 1}`
                         });
-                    };
+                    });
 
-                    let showingAll = data.previews.length <= 8;
-                    renderGrid(showingAll ? null : 8);
-                    previewContainer.appendChild(grid);
+                    grid.appendChild(card);
+                });
 
-                    const toggleBtn = header.querySelector("#toggle-previews");
-                    if (toggleBtn) {
-                        if (data.previews.length <= 8) {
-                            toggleBtn.style.display = "none";
-                        } else {
-                            toggleBtn.addEventListener("click", () => {
-                                showingAll = !showingAll;
-                                renderGrid(showingAll ? null : 8);
-                                toggleBtn.textContent = showingAll ? "Show less" : "Show all";
-                            });
-                        }
-                    }
+                // Bind Select All
+                const selectAll = imgSection.querySelector("#select-all-images");
+                if (selectAll) {
+                    selectAll.addEventListener("change", () => {
+                        const allChecks = imgSection.querySelectorAll(".img-select-check");
+                        allChecks.forEach(c => {
+                            c.checked = selectAll.checked;
+                            c.closest(".image-item-card")?.classList.toggle("selected", selectAll.checked);
+                        });
+                        this.updateImagesSelectedCounter(images.length);
+                    });
                 }
+
+                // Bind batch action buttons
+                const btnBatchZip = imgSection.querySelector("#btn-batch-zip");
+                const btnBatchPdf = imgSection.querySelector("#btn-batch-pdf");
+                const btnBatchDocx = imgSection.querySelector("#btn-batch-docx");
+
+                if (btnBatchZip) {
+                    btnBatchZip.addEventListener("click", () => {
+                        const selected = this.getSelectedImageIndices();
+                        if (selected.length === 0) {
+                            alert("Please select at least 1 image to download.");
+                            return;
+                        }
+                        this.startDownload({ format: "zip", selected_indices: selected });
+                    });
+                }
+
+                if (btnBatchPdf) {
+                    btnBatchPdf.addEventListener("click", () => {
+                        const selected = this.getSelectedImageIndices();
+                        if (selected.length === 0) {
+                            alert("Please select at least 1 image to convert to PDF.");
+                            return;
+                        }
+                        this.startDownload({ format: "pdf", selected_indices: selected });
+                    });
+                }
+
+                if (btnBatchDocx) {
+                    btnBatchDocx.addEventListener("click", () => {
+                        const selected = this.getSelectedImageIndices();
+                        if (selected.length === 0) {
+                            alert("Please select at least 1 image to convert to Word.");
+                            return;
+                        }
+                        this.startDownload({ format: "docx", selected_indices: selected });
+                    });
+                }
+            }
+
+            // 2. VIDEOS SECTION
+            if (videos.length > 0) {
+                const vidSection = document.createElement("div");
+                vidSection.className = "media-seg-section";
+                vidSection.innerHTML = `
+                    <div class="media-seg-header">
+                        <div class="media-seg-title">
+                            <span>&#x1F3AC;</span> Videos (${videos.length})
+                        </div>
+                    </div>
+                    <div class="videos-collection-grid" id="videos-collection-grid"></div>
+                `;
+
+                previewContainer.appendChild(vidSection);
+                const vidGrid = vidSection.querySelector("#videos-collection-grid");
+
+                videos.forEach((vid, i) => {
+                    const card = document.createElement("div");
+                    card.className = "video-item-card";
+                    card.innerHTML = `
+                        <div class="video-preview-wrapper">
+                            ${vid.url ? `<video controls preload="metadata" poster="${vid.thumbnail_url || ''}" src="${vid.url}"></video>` : `
+                                <img src="${vid.thumbnail_url || ''}" alt="Video thumbnail">
+                                <div class="video-play-badge">&#x25B6;</div>
+                            `}
+                        </div>
+                        <div class="video-item-info">
+                            <div class="video-item-title">${vid.title || `Video #${i + 1}`}</div>
+                            <div class="video-actions-row">
+                                <button type="button" class="btn-video-action btn-mp4" data-index="${vid.origIndex}">
+                                    &#x2193; Download MP4 Video
+                                </button>
+                                <button type="button" class="btn-video-action btn-mkv" data-index="${vid.origIndex}">
+                                    &#x2193; Download MKV (Lossless)
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    const mp4Btn = card.querySelector(".btn-mp4");
+                    const mkvBtn = card.querySelector(".btn-mkv");
+
+                    if (mp4Btn) {
+                        mp4Btn.addEventListener("click", () => {
+                            this.startDownload({
+                                format: "mp4",
+                                selected_indices: [vid.origIndex],
+                                custom_filename: `video_${i + 1}`
+                            });
+                        });
+                    }
+
+                    if (mkvBtn) {
+                        mkvBtn.addEventListener("click", () => {
+                            this.startDownload({
+                                format: "mkv",
+                                selected_indices: [vid.origIndex],
+                                custom_filename: `video_${i + 1}`
+                            });
+                        });
+                    }
+
+                    vidGrid.appendChild(card);
+                });
+            }
+
+            // 3. MUSIC & BACKGROUND AUDIO SECTION
+            if (audios.length > 0) {
+                const audSection = document.createElement("div");
+                audSection.className = "media-seg-section";
+                audSection.innerHTML = `
+                    <div class="media-seg-header">
+                        <div class="media-seg-title">
+                            <span>&#x1F3B5;</span> Music &amp; Audio Track (${audios.length})
+                        </div>
+                    </div>
+                    <div class="audios-collection-grid" id="audios-collection-grid"></div>
+                `;
+
+                previewContainer.appendChild(audSection);
+                const audGrid = audSection.querySelector("#audios-collection-grid");
+
+                audios.forEach((aud, i) => {
+                    const card = document.createElement("div");
+                    card.className = "audio-item-card";
+                    card.innerHTML = `
+                        <div class="audio-card-icon-box">&#x1F3B5;</div>
+                        <div class="audio-card-details">
+                            <div class="audio-track-title">${aud.title || "Background Audio Track"}</div>
+                            <div class="audio-player-wrapper">
+                                <audio controls preload="none" src="${aud.url}"></audio>
+                            </div>
+                        </div>
+                        <div class="audio-card-actions">
+                            <button type="button" class="btn-audio-action btn-mp3" data-index="${aud.origIndex}">
+                                &#x2193; Download MP3
+                            </button>
+                            <button type="button" class="btn-audio-action btn-m4a" data-index="${aud.origIndex}">
+                                &#x2193; Download M4A
+                            </button>
+                        </div>
+                    `;
+
+                    const mp3Btn = card.querySelector(".btn-mp3");
+                    const m4aBtn = card.querySelector(".btn-m4a");
+
+                    if (mp3Btn) {
+                        mp3Btn.addEventListener("click", () => {
+                            this.startDownload({
+                                format: "audio",
+                                selected_indices: [aud.origIndex],
+                                custom_filename: `${aud.title || 'audio_track'}`
+                            });
+                        });
+                    }
+
+                    if (m4aBtn) {
+                        m4aBtn.addEventListener("click", () => {
+                            this.startDownload({
+                                format: "m4a",
+                                selected_indices: [aud.origIndex],
+                                custom_filename: `${aud.title || 'audio_track'}`
+                            });
+                        });
+                    }
+
+                    audGrid.appendChild(card);
+                });
             }
         }
 
-        // Format Selection Cards
+        // Format Selection Cards Grid
         const formatGrid = document.getElementById("format-cards-grid");
         if (formatGrid) {
             formatGrid.innerHTML = "";
 
             const FORMAT_META = {
-                pdf: { format: "pdf", label: "PDF Document", badge: "PDF", desc: "All pages/slides merged into a clean PDF document" },
-                images_pdf: { format: "pdf", label: "PDF Document", badge: "PDF", desc: "Combine all extracted slides into a single PDF" },
-                zip: { format: "zip", label: "ZIP Archive", badge: "ZIP", desc: "All original images and videos packaged in a ZIP archive" },
-                images_zip: { format: "zip", label: "Images ZIP", badge: "ZIP", desc: "High-resolution extracted images packaged in a ZIP" },
-                images: { format: "zip", label: "Images ZIP", badge: "ZIP", desc: "All individual extracted images in a ZIP" },
-                all_zip: { format: "zip", label: "Complete ZIP", badge: "ZIP", desc: "Complete bundle of all media items extracted from this link" },
-                docx: { format: "docx", label: "Word Document", badge: "DOCX", desc: "Editable Microsoft Word document with embedded media" },
+                zip: { format: "zip", label: "ZIP Archive", badge: "ZIP", desc: "All original media packaged in a ZIP archive" },
+                images_zip: { format: "zip", label: "Images ZIP", badge: "ZIP", desc: "Selected high-resolution images in a ZIP" },
+                images: { format: "zip", label: "Images ZIP", badge: "ZIP", desc: "All extracted images in a ZIP" },
+                all_zip: { format: "zip", label: "Complete ZIP", badge: "ZIP", desc: "Complete bundle of all media items extracted" },
+                pdf: { format: "pdf", label: "PDF Document", badge: "PDF", desc: "Convert images/slides into a clean PDF document" },
+                images_pdf: { format: "pdf", label: "PDF Document", badge: "PDF", desc: "Combine extracted images into a single PDF" },
+                docx: { format: "docx", label: "Word Document", badge: "DOCX", desc: "Editable Microsoft Word document with images" },
                 doc: { format: "docx", label: "Word Document", badge: "DOCX", desc: "Editable Microsoft Word document" },
-                mp4: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Universal video compatible with all devices and players" },
+                mp4: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Universal video compatible with all devices" },
                 video: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Direct video stream packaged in MP4 container" },
-                mkv: { format: "mkv", label: "MKV Video", badge: "MKV", desc: "Lossless Matroska container preserving all tracks" },
-                webm: { format: "webm", label: "WebM Video", badge: "WEBM", desc: "Web-optimized lightweight video format" },
-                audio: { format: "audio", label: "MP3 Audio", badge: "MP3", desc: "Extracted high-bitrate audio track (192 kbps)" },
-                mp3: { format: "audio", label: "MP3 Audio", badge: "MP3", desc: "Standard high-fidelity MP3 audio stream" },
-                m4a: { format: "m4a", label: "M4A Audio", badge: "AAC", desc: "Pristine Apple AAC high-clarity audio stream" },
-                original: { format: "original", label: "Original Media", badge: "RAW", desc: "Direct source file in native original resolution" }
+                mkv: { format: "mkv", label: "MKV Video", badge: "MKV", desc: "Lossless Matroska container" },
+                webm: { format: "webm", label: "WebM Video", badge: "WEBM", desc: "Web-optimized lightweight video" },
+                audio: { format: "audio", label: "MP3 Audio", badge: "MP3", desc: "High-bitrate audio track (192 kbps)" },
+                mp3: { format: "audio", label: "MP3 Audio", badge: "MP3", desc: "Standard high-fidelity MP3 stream" },
+                m4a: { format: "m4a", label: "M4A Audio", badge: "AAC", desc: "Apple AAC high-clarity audio stream" },
+                original: { format: "original", label: "Original Media", badge: "RAW", desc: "Direct source files in original resolution" }
             };
 
             const rawFormats = (data.formats && Array.isArray(data.formats) && data.formats.length > 0)
                 ? data.formats
-                : (data.available_formats || ["original"]);
+                : (data.available_formats || ["zip", "original"]);
 
-            // Deduplicate formats
             const seenKeys = new Set();
             const formatItems = [];
 
@@ -339,7 +567,7 @@ const DownloaderApp = {
                     format: key || "original",
                     label: (key || "MEDIA").toUpperCase() + " File",
                     badge: (key || "FILE").toUpperCase(),
-                    desc: `Download content packaged as .${key}`
+                    desc: `Download packaged as .${key}`
                 };
                 if (!seenKeys.has(meta.format)) {
                     seenKeys.add(meta.format);
@@ -348,76 +576,36 @@ const DownloaderApp = {
             });
 
             if (formatItems.length === 0) {
-                formatItems.push(FORMAT_META.original);
+                formatItems.push(FORMAT_META.zip);
             }
 
             this.selectedFormat = formatItems[0].format;
 
-            const updateDownloadButtonText = (label) => {
-                const btn = document.getElementById("btn-start-download");
-                if (btn) {
-                    btn.innerHTML = `&#x2193; Download as ${label}`;
-                }
-            };
-
-            const updateQualityVisibility = (formatKey) => {
-                const isVideo = ["mp4", "mkv", "webm", "video"].includes(String(formatKey).toLowerCase());
-                const qualityRow = document.getElementById("quality-setting-group");
-                if (qualityRow) {
-                    qualityRow.style.display = (isVideo && data.available_qualities && data.available_qualities.length > 0) ? "flex" : "none";
-                }
-            };
-
-            formatItems.forEach((fmt, index) => {
+            formatItems.forEach((f, idx) => {
                 const card = document.createElement("div");
-                card.className = `format-card ${index === 0 ? "selected" : ""}`;
-                card.setAttribute("data-format", fmt.format);
+                card.className = `format-card ${idx === 0 ? "active" : ""}`;
+                card.setAttribute("data-format", f.format);
                 card.innerHTML = `
-                    <div class="format-card-top">
-                        <span class="format-badge-pill">${fmt.badge}</span>
-                        <span class="format-check-icon">${index === 0 ? "&#x2713;" : ""}</span>
+                    <div class="format-card-header">
+                        <span class="format-badge">${f.badge}</span>
+                        <span class="format-title">${f.label}</span>
                     </div>
-                    <div class="format-label">${fmt.label}</div>
-                    <div class="format-desc">${fmt.desc}</div>
+                    <p class="format-desc">${f.desc}</p>
                 `;
 
                 card.addEventListener("click", () => {
-                    formatGrid.querySelectorAll(".format-card").forEach(c => {
-                        c.classList.remove("selected");
-                        const icon = c.querySelector(".format-check-icon");
-                        if (icon) icon.innerHTML = "";
-                    });
-                    card.classList.add("selected");
-                    const icon = card.querySelector(".format-check-icon");
-                    if (icon) icon.innerHTML = "&#x2713;";
-                    this.selectedFormat = fmt.format;
-                    updateDownloadButtonText(fmt.label);
-                    updateQualityVisibility(fmt.format);
+                    document.querySelectorAll(".format-card").forEach(c => c.classList.remove("active"));
+                    card.classList.add("active");
+                    this.selectedFormat = f.format;
+                    const btn = document.getElementById("btn-start-download");
+                    if (btn) btn.innerHTML = `&#x2193; Download as ${f.label}`;
                 });
 
                 formatGrid.appendChild(card);
             });
 
-            updateDownloadButtonText(formatItems[0].label);
-            updateQualityVisibility(formatItems[0].format);
-        }
-
-        // Quality Selector (if video)
-        const qualityRow = document.getElementById("quality-setting-group");
-        const qualitySelect = document.getElementById("quality-select");
-        if (qualityRow && qualitySelect) {
-            if (Array.isArray(data.available_qualities) && data.available_qualities.length > 0) {
-                qualitySelect.innerHTML = "";
-                data.available_qualities.forEach(q => {
-                    const opt = document.createElement("option");
-                    opt.value = q.value || q;
-                    opt.textContent = q.label || q;
-                    qualitySelect.appendChild(opt);
-                });
-                qualityRow.style.display = "flex";
-            } else {
-                qualityRow.style.display = "none";
-            }
+            const btn = document.getElementById("btn-start-download");
+            if (btn) btn.innerHTML = `&#x2193; Download as ${formatItems[0].label}`;
         }
 
         // Custom Filename Input
@@ -427,24 +615,71 @@ const DownloaderApp = {
             customFilenameInput.placeholder = data.title || "custom_filename (optional)";
         }
 
-        // Caption toggle (if supported)
-        const captionToggleRow = document.getElementById("caption-setting-group");
-        if (captionToggleRow) {
-            captionToggleRow.style.display = data.has_caption ? "flex" : "none";
-        }
-
         this.showView("options-view");
     },
 
-    async startDownload() {
-        if (!this.currentUrl || !this.selectedFormat) return;
+    updateImagesSelectedCounter(total) {
+        const selected = this.getSelectedImageIndices();
+        const pill = document.getElementById("images-selected-pill");
+        if (pill) {
+            pill.textContent = `${selected.length} of ${total} selected`;
+        }
+        const selectAll = document.getElementById("select-all-images");
+        if (selectAll) {
+            selectAll.checked = selected.length === total;
+            selectAll.indeterminate = selected.length > 0 && selected.length < total;
+        }
+    },
 
-        this.showView("downloading-view");
+    openImageLightbox(imageUrl, title) {
+        let modal = document.getElementById("image-lightbox-modal");
+        if (!modal) {
+            modal = document.createElement("div");
+            modal.id = "image-lightbox-modal";
+            modal.className = "modal-backdrop image-lightbox-backdrop";
+            modal.innerHTML = `
+                <div class="image-lightbox-dialog">
+                    <button type="button" class="lightbox-close-btn">&times;</button>
+                    <img id="lightbox-full-img" src="" alt="Full preview">
+                    <div class="lightbox-footer">
+                        <span id="lightbox-title">${title || "Image Preview"}</span>
+                        <a href="#" id="lightbox-direct-link" target="_blank" class="lightbox-open-new">Open Original &#x2197;</a>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
 
-        const customFilename = (document.getElementById("custom-filename-input")?.value || "").trim();
-        const quality = document.getElementById("quality-select")?.value || "";
+            modal.querySelector(".lightbox-close-btn").addEventListener("click", () => {
+                modal.classList.remove("show");
+            });
+
+            modal.addEventListener("click", (e) => {
+                if (e.target === modal) modal.classList.remove("show");
+            });
+        }
+
+        const img = modal.querySelector("#lightbox-full-img");
+        const link = modal.querySelector("#lightbox-direct-link");
+        const titleEl = modal.querySelector("#lightbox-title");
+
+        if (img) img.src = imageUrl;
+        if (link) link.href = imageUrl;
+        if (titleEl) titleEl.textContent = title || "Image Preview";
+
+        modal.classList.add("show");
+    },
+
+    async startDownload(options = {}) {
+        if (!this.currentUrl) return;
+
+        const format = options.format || this.selectedFormat || "zip";
+        const selectedIndices = options.selected_indices !== undefined ? options.selected_indices : this.getSelectedImageIndices();
+        const customFilename = (options.custom_filename || document.getElementById("custom-filename-input")?.value || "").trim();
+        const quality = document.getElementById("quality-select")?.value || "best";
         const captionCheckbox = document.getElementById("include-caption-checkbox");
         const includeCaption = captionCheckbox ? captionCheckbox.checked : false;
+
+        this.showView("downloading-view");
 
         try {
             const response = await fetch("/api/generate", {
@@ -452,7 +687,8 @@ const DownloaderApp = {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     url: this.currentUrl,
-                    format: this.selectedFormat,
+                    format: format,
+                    selected_indices: selectedIndices && selectedIndices.length > 0 ? selectedIndices : null,
                     quality: quality,
                     custom_filename: customFilename,
                     include_caption: includeCaption
@@ -468,13 +704,13 @@ const DownloaderApp = {
             }
 
             this.currentFileId = data.file_id;
-            this.showSuccess(data);
+            this.showSuccess(data, format);
         } catch (err) {
             this.showError("Network interrupted while generating download package.");
         }
     },
 
-    showSuccess(data) {
+    showSuccess(data, format) {
         const fnEl = document.getElementById("success-filename");
         const szEl = document.getElementById("success-filesize");
         const fmtEl = document.getElementById("success-format");
@@ -482,7 +718,7 @@ const DownloaderApp = {
 
         if (fnEl) fnEl.textContent = data.filename || "download_file";
         if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
-        if (fmtEl) fmtEl.textContent = (this.selectedFormat || "FILE").toUpperCase();
+        if (fmtEl) fmtEl.textContent = (format || this.selectedFormat || "FILE").toUpperCase();
 
         if (dlBtn) {
             const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
@@ -490,7 +726,17 @@ const DownloaderApp = {
             dlBtn.setAttribute("download", data.filename || "download_file");
         }
 
-        // Reset email widget state
+        // Trigger automatic browser download immediately
+        if (data.file_id) {
+            const autoLink = document.createElement("a");
+            autoLink.href = `/download/${encodeURIComponent(data.file_id)}`;
+            autoLink.setAttribute("download", data.filename || "download_file");
+            document.body.appendChild(autoLink);
+            autoLink.click();
+            document.body.removeChild(autoLink);
+        }
+
+        // Reset email widget
         const emailWidget = document.getElementById("email-widget");
         const emailInput = document.getElementById("email-input");
         const emailStatus = document.getElementById("email-status-message");
@@ -528,8 +774,13 @@ const DownloaderApp = {
             emailSendBtn.textContent = "Sending...";
         }
 
+        if (emailStatus) {
+            emailStatus.className = "email-status-message";
+            emailStatus.textContent = "Attaching file and sending via SMTP...";
+        }
+
         try {
-            const response = await fetch("/api/send-email", {
+            const response = await fetch("/api/email", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -540,70 +791,64 @@ const DownloaderApp = {
 
             const data = await response.json();
 
-            if (emailSendBtn) {
-                emailSendBtn.disabled = false;
-                emailSendBtn.textContent = "Send";
-            }
-
             if (response.ok && data.success) {
                 if (emailStatus) {
                     emailStatus.className = "email-status-message success";
-                    emailStatus.textContent = data.message || `File successfully delivered to ${email}!`;
+                    emailStatus.textContent = `Attached & sent successfully to ${email}!`;
                 }
+                if (emailSendBtn) emailSendBtn.textContent = "Sent!";
             } else {
+                const msg = (data.error && data.error.message) || "Failed to deliver email.";
                 if (emailStatus) {
                     emailStatus.className = "email-status-message error";
-                    emailStatus.textContent = (data.error && data.error.message) || "Could not deliver email. Please try again.";
+                    emailStatus.textContent = msg;
+                }
+                if (emailSendBtn) {
+                    emailSendBtn.disabled = false;
+                    emailSendBtn.textContent = "Retry";
                 }
             }
         } catch (err) {
-            if (emailSendBtn) {
-                emailSendBtn.disabled = false;
-                emailSendBtn.textContent = "Send";
-            }
             if (emailStatus) {
                 emailStatus.className = "email-status-message error";
-                emailStatus.textContent = "Network error delivering email.";
+                emailStatus.textContent = "Network error sending email.";
+            }
+            if (emailSendBtn) {
+                emailSendBtn.disabled = false;
+                emailSendBtn.textContent = "Retry";
             }
         }
     },
 
     showError(msg) {
-        const errorEl = document.getElementById("error-message");
-        if (errorEl) errorEl.textContent = msg || "An unexpected error occurred. Please try again.";
+        const errorMsgEl = document.getElementById("error-message");
+        if (errorMsgEl) {
+            errorMsgEl.textContent = msg || "Unable to extract or package media from this URL.";
+        }
         this.showView("error-view");
     },
 
     initModals() {
-        const openAbout = document.getElementById("open-about-modal");
-        const closeAbout = document.getElementById("close-about-modal");
-        const aboutModal = document.getElementById("about-modal");
+        const setupModal = (openBtnId, modalId, closeBtnId) => {
+            const openBtn = document.getElementById(openBtnId);
+            const modal = document.getElementById(modalId);
+            const closeBtn = document.getElementById(closeBtnId);
 
-        const openPlatforms = document.getElementById("open-platforms-modal");
-        const closePlatforms = document.getElementById("close-platforms-modal");
-        const platformsModal = document.getElementById("platforms-modal");
-
-        if (openAbout && aboutModal) {
-            openAbout.addEventListener("click", () => aboutModal.classList.add("show"));
-        }
-        if (closeAbout && aboutModal) {
-            closeAbout.addEventListener("click", () => aboutModal.classList.remove("show"));
-        }
-        if (openPlatforms && platformsModal) {
-            openPlatforms.addEventListener("click", () => platformsModal.classList.add("show"));
-        }
-        if (closePlatforms && platformsModal) {
-            closePlatforms.addEventListener("click", () => platformsModal.classList.remove("show"));
-        }
-
-        // Close on backdrop click
-        [aboutModal, platformsModal].forEach(modal => {
+            if (openBtn && modal) {
+                openBtn.addEventListener("click", () => modal.classList.add("show"));
+            }
+            if (closeBtn && modal) {
+                closeBtn.addEventListener("click", () => modal.classList.remove("show"));
+            }
             if (modal) {
                 modal.addEventListener("click", (e) => {
                     if (e.target === modal) modal.classList.remove("show");
                 });
             }
-        });
+        };
+
+        setupModal("open-about-modal", "about-modal", "close-about-modal");
+        setupModal("open-platforms-modal", "platforms-modal", "close-platforms-modal");
     }
 };
 

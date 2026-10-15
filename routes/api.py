@@ -69,12 +69,17 @@ def generate_endpoint():
             }
         }), 400
 
+    selected_indices = data.get("selected_indices")
+    if selected_indices is not None and not isinstance(selected_indices, list):
+        selected_indices = None
+
     ok, job_id, filename, mime_type, filesize, err = MediaService.process_and_package(
         url=url,
         output_format=output_format,
         quality=quality,
         custom_filename=custom_filename,
-        include_caption=include_caption
+        include_caption=include_caption,
+        selected_indices=selected_indices
     )
 
     if not ok:
