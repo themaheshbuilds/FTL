@@ -370,26 +370,27 @@ pytest -v
 
 # 12. Vercel Serverless Routing & Navigation Gotchas
 
-### 1. Canonical Vercel Rewrite Destination (`/api/index?__vercel_path__=/$1`)
+### 1. Canonical Vercel Rewrite Destination (`/api/index`)
 - **The Problem:** 
-  1. If `vercel.json` rewrites directly to `/api/index` without dynamic path capture, Vercel edge sets WSGI `PATH_INFO = "/api/index"`. Because Flask has no route defined for `/api/index`, Flask triggers `404 NOT FOUND` ("The requested resource was not found") for every single request.
-  2. If a route alias `@web_bp.route("/api/index")` was added to `index()`, every page (`/downloader`, `/converter`, etc.) hit the home view and was trapped on the home page.
-  3. Specifying `/api/index.py` with `.py` failed because Vercel functions are identified without extensions.
+  1. Specifying query parameters in rewrite destinations (`/api/index?__vercel_path__=/$1`) causes Vercel Edge router to fail function route matching, throwing an edge-level `404 NOT_FOUND` for all URLs.
+  2. Directly calling `/api/index` sets `PATH_INFO = "/api/index"`, which caused Flask 404s when no middleware was active.
+  3. Adding `@web_bp.route("/api/index")` trapped all pages on the home screen.
 - **The Solution:**
-  - `vercel.json` forwards the captured regex group `$1` into a dedicated query parameter:
+  - `vercel.json` rewrite rule is canonical without query parameters:
     ```json
     {
       "rewrites": [
         {
           "source": "/(.*)",
-          "destination": "/api/index?__vercel_path__=/$1"
+          "destination": "/api/index"
         }
       ]
     }
     ```
-  - In `api/index.py`, `VercelPathMiddleware` extracts `__vercel_path__`, normalizes slashes, and assigns it to `environ["PATH_INFO"]`, while cleanly stripping `__vercel_path__` from `environ["QUERY_STRING"]` so `request.args` remains clean.
-  - If invoked directly with `/api/index` or without `__vercel_path__`, it automatically defaults `PATH_INFO = "/"`, preventing any 404 dead-ends.
-  - All routes (`/`, `/downloader`, `/converter`, `/converter/<tool_slug>`, `/api/analyze`, `/api/generate`, `/download/<file_id>`) route with 100% fidelity. Verified via `tests/test_vercel_middleware.py`.
+  - In `api/index.py`, `VercelWSGIMiddleware` inspects `environ.get("HTTP_X_MATCHED_PATH")`:
+    - If `PATH_INFO` is `/api/index`, it restores `PATH_INFO` from `HTTP_X_MATCHED_PATH` (e.g., `/downloader`, `/converter`, `/converter/<tool>`, `/api/analyze`).
+    - If `HTTP_X_MATCHED_PATH` is empty, missing, or points to `/api/index`, it automatically defaults `PATH_INFO = "/"`, guaranteeing the home page opens cleanly.
+  - All routes (`/`, `/downloader`, `/converter`, `/files`, `/convert`, `/converter/<tool_slug>`, `/api/analyze`, `/api/generate`, `/download/<file_id>`) route with 100% fidelity. Verified via `tests/test_vercel_middleware.py`.
 
 ### 2. Dual 404 Errorhandler (HTML vs. JSON)
 - **The Problem:** When users navigated to a mistyped or missing page on Vercel, returning raw JSON `{"error": {"code": "NOT_FOUND", ...}}` dumped an unstyled raw JSON string on a blank browser screen, leading users to believe the site was broken.
