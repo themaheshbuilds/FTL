@@ -61,27 +61,28 @@ def create_app(config_object=None) -> Flask:
     # Application-wide error handlers
     @app.errorhandler(404)
     def handle_not_found(e):
-        accept_header = request.headers.get("Accept", "")
-        # Render HTML error page if requested by a web browser explicitly asking for HTML
+        # API endpoints and programmatic clients receive JSON
         if (
-            accept_header.startswith("text/html")
-            and not request.path.startswith("/api/")
-            and not request.is_json
+            request.path.startswith("/api/")
+            or request.is_json
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.headers.get("Accept") == "application/json"
         ):
-            return render_template(
-                "error.html",
-                error_code="404",
-                error_title="Page Not Found",
-                error_message="The page you were looking for does not exist or has moved."
-            ), 404
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "The requested API endpoint was not found."
+                }
+            }), 404
 
-        return jsonify({
-            "success": False,
-            "error": {
-                "code": "NOT_FOUND",
-                "message": "The requested resource was not found."
-            }
-        }), 404
+        # All browser web page navigations receive the styled LinkForge error page
+        return render_template(
+            "error.html",
+            error_code="404",
+            error_title="Page Not Found",
+            error_message="The page or tool you were looking for does not exist or has moved."
+        ), 404
 
     @app.errorhandler(500)
     def handle_internal_error(e):

@@ -18,10 +18,18 @@ def test_health_check(client):
     assert data == {"status": "ok"}
 
 
-def test_404_not_found(client):
-    """Test that a non-existent route returns formatted error without stack trace."""
-    response = client.get("/non-existent-endpoint")
+def test_api_404_not_found(client):
+    """Test that a non-existent API route returns formatted JSON error."""
+    response = client.get("/api/non-existent-endpoint")
     assert response.status_code == 404
     data = response.get_json()
     assert data["success"] is False
     assert data["error"]["code"] == "NOT_FOUND"
+
+
+def test_web_404_not_found(client):
+    """Test that a non-existent browser page renders styled HTML error."""
+    response = client.get("/non-existent-page")
+    assert response.status_code == 404
+    assert b"Page Not Found" in response.data
+    assert b"Return to Home" in response.data

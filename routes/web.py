@@ -126,6 +126,11 @@ def downloader():
 @web_bp.route("/converter", methods=["GET"], strict_slashes=False)
 @web_bp.route("/converter.html", methods=["GET"], strict_slashes=False)
 @web_bp.route("/converters", methods=["GET"], strict_slashes=False)
+@web_bp.route("/convert", methods=["GET"], strict_slashes=False)
+@web_bp.route("/files", methods=["GET"], strict_slashes=False)
+@web_bp.route("/file", methods=["GET"], strict_slashes=False)
+@web_bp.route("/file-converter", methods=["GET"], strict_slashes=False)
+@web_bp.route("/file-converters", methods=["GET"], strict_slashes=False)
 @web_bp.route("/tools", methods=["GET"], strict_slashes=False)
 def converter():
     """Render Universal File Converter Hub."""
@@ -135,6 +140,8 @@ def converter():
 @web_bp.route("/converter/<tool_slug>", methods=["GET"], strict_slashes=False)
 @web_bp.route("/tool/<tool_slug>", methods=["GET"], strict_slashes=False)
 @web_bp.route("/tools/<tool_slug>", methods=["GET"], strict_slashes=False)
+@web_bp.route("/files/<tool_slug>", methods=["GET"], strict_slashes=False)
+@web_bp.route("/file/<tool_slug>", methods=["GET"], strict_slashes=False)
 def converter_tool(tool_slug):
     """Render dedicated page for a specific conversion tool."""
     tool = CONVERTER_TOOLS.get(tool_slug)

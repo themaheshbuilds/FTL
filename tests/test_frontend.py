@@ -61,9 +61,10 @@ def test_downloader_page_loads(client):
     assert b"analyze-btn" in response.data
 
 
-def test_converter_hub_page_loads(client):
-    """Test that GET /converter loads the converter hub page."""
-    response = client.get("/converter")
+@pytest.mark.parametrize("route", ["/converter", "/convert", "/files", "/file-converter", "/converters"])
+def test_converter_hub_page_loads(client, route):
+    """Test that GET /converter, /files, and aliases load the converter hub page."""
+    response = client.get(route)
     assert response.status_code == 200
     assert b"LINKFORGE" in response.data
     assert b"converter-dropzone" in response.data
