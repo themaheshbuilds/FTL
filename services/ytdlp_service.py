@@ -166,15 +166,19 @@ class YtDlpService:
     def get_default_opts(cls, extra_opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Standardized yt-dlp options ensuring safety, ffmpeg integration, and full resolution support."""
         is_serverless = Config.IS_SERVERLESS or bool(os.getenv("VERCEL"))
-        default_timeout = 8 if is_serverless else 20
+        default_timeout = 6 if is_serverless else 10
 
         opts = {
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
             "socket_timeout": default_timeout,
+            "retries": 2,
+            "fragment_retries": 2,
             "extract_flat": False,
-            "noplaylist": False,
+            "noplaylist": True,
+            "youtube_include_dash_manifest": False,
+            "youtube_include_hls_manifest": False,
             "ignoreerrors": True,
             "nocheckcertificate": False,
             "windowsfilenames": True,
@@ -214,26 +218,24 @@ class YtDlpService:
                 opts.update(extra_copy)
             else:
                 opts.update(extra_opts)
+            if "noplaylist" in extra_opts:
+                opts["noplaylist"] = extra_opts["noplaylist"]
         return opts
 
     @classmethod
     def extract_info(cls, url: str) -> Tuple[Optional[Dict[str, Any]], str]:
-        """Extract metadata without downloading files, attempting full resolution first then mobile fallbacks."""
+        """Extract metadata without downloading files, attempting fast mobile resolution first then fallbacks."""
         import re
         is_youtube = bool(re.search(r"(?:youtube\.com|youtu\.be)", url, re.IGNORECASE))
 
         if is_youtube:
             client_configs = [
-                # 1. Primary: Default web/visionos/safari clients without TV client (avoids "page needs to be reloaded")
-                ({"player_client": ["default", "-tv"]}, True),
-                # 2. VisionOS client with cookies (unrestricted 4K streams)
-                ({"player_client": ["visionos"]}, True),
-                # 3. Safari client with cookies
-                ({"player_client": ["safari"]}, True),
-                # 4. Cloud Fallback: android mobile client WITHOUT cookies (mobile clients reject cookies, but bypass datacenter blocks)
+                # 1. Primary: android mobile client WITHOUT cookies (bypasses datacenter blocks, ~1.5s)
                 ({"player_client": ["android"], "player_skip": ["webpage", "configs"]}, False),
-                # 5. Fallback: dedicated ios client WITHOUT cookies
-                ({"player_client": ["ios"], "player_skip": ["webpage", "configs"]}, False),
+                # 2. Secondary: default web client with cookies
+                ({"player_client": ["default", "-tv"]}, True),
+                # 3. Fallback: safari client with cookies
+                ({"player_client": ["safari"]}, True),
             ]
         else:
             # For non-YouTube platforms (Reddit, Twitter, etc.), standard extraction with and without cookies
@@ -247,7 +249,7 @@ class YtDlpService:
 
         for config, use_cookies in client_configs:
             proxy_candidates = list(proxies) if proxies else [None]
-            for current_proxy in proxy_candidates[:3]:
+            for current_proxy in proxy_candidates[:1]:
                 try:
                     extra = {"skip_download": True, "ignoreerrors": False}
                     if config:
