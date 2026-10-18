@@ -789,16 +789,16 @@ const DownloaderApp = {
         if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
         if (fmtEl) fmtEl.textContent = (format || this.selectedFormat || "FILE").toUpperCase();
 
+        const downloadUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
         if (dlBtn) {
-            const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
             dlBtn.href = downloadUrl;
             dlBtn.setAttribute("download", data.filename || "download_file");
         }
 
         // Trigger automatic browser download immediately
-        if (data.file_id) {
+        if (downloadUrl) {
             const autoLink = document.createElement("a");
-            autoLink.href = `/download/${encodeURIComponent(data.file_id)}`;
+            autoLink.href = downloadUrl;
             autoLink.setAttribute("download", data.filename || "download_file");
             document.body.appendChild(autoLink);
             autoLink.click();

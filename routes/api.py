@@ -99,11 +99,29 @@ def generate_endpoint():
         else:
             size_formatted = f"{(filesize / (1024 * 1024)):.2f} MB"
 
-    return jsonify({
+    res_payload = {
         "success": True,
         "file_id": job_id,
         "filename": filename,
         "mime_type": mime_type,
         "filesize": filesize,
-        "size_formatted": size_formatted
-    }), 200
+        "size_formatted": size_formatted,
+        "download_url": f"/download/{job_id}"
+    }
+
+    # Embed data_url for files <= 4MB for instant 0-latency serverless download
+    try:
+        from services.job_service import JobService
+        import base64
+        import os
+        job = JobService.get_job(job_id)
+        if job and job.output_file_path and os.path.isfile(job.output_file_path):
+            actual_size = os.path.getsize(job.output_file_path)
+            if actual_size <= 4 * 1024 * 1024:
+                with open(job.output_file_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("ascii")
+                res_payload["data_url"] = f"data:{mime_type or 'application/octet-stream'};base64,{b64}"
+    except Exception as e:
+        logger.debug(f"Could not build data_url for job {job_id}: {e}")
+
+    return jsonify(res_payload), 200

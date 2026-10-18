@@ -353,7 +353,7 @@ const Analyzer = {
         document.getElementById("success-filesize").textContent = sizeText;
 
         const directBtn = document.getElementById("direct-download-btn");
-        const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
+        const downloadUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
         directBtn.href = downloadUrl;
         directBtn.setAttribute("download", data.filename || "download_file");
 

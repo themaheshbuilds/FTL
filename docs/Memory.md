@@ -419,3 +419,14 @@ pytest -v
      - `/downloader` (`templates/downloader.html`): Dedicated Link Downloader page with active header pill and full downloader workflow.
      - `/converter` & `/files` (`templates/converter.html`): Dedicated File Converter Hub with active header pill and universal multi-file converter.
      - `/converter/<tool_slug>` (`templates/tool_converter.html`): Standalone single-purpose conversion tool pages.
+
+### 5. Serverless Multi-Container Zero-Latency Direct Download & Universal Converter Resilience
+- **The Problem:**
+  1. *404 on Download:* In Vercel serverless environments, functions are multi-container and stateless. Request 1 (`POST /api/generate` or `POST /api/convert`) generated files on container A's `/tmp`. Request 2 (`GET /download/<file_id>`) hit container B where `/tmp` was empty, returning `404 EXPIRED_OR_NOT_FOUND`.
+  2. *Unclickable / Missing Convert Button:* On `/converter`, `fileInput.accept` was hardcoded to `.pdf` at initialization. Non-PDF files could not be chosen in the OS picker, or triggered format mismatch errors.
+  3. *Missing Auto-Download Trigger:* Frontend conversion lacked automated programmatic click simulation on completion.
+- **The Solution:**
+  1. **Direct In-Memory Base64 Data URL (`data_url`):** In both `/api/generate` and `/api/convert`, files <= 4 MB are automatically read, base64-encoded, and embedded directly into the response JSON as `data_url: "data:<mime>;base64,..."`. `downloader.js`, `converter.js`, `tool_converter.js`, and `analyzer.js` prefer `data.data_url` if present, triggering the download instantly from browser memory with zero network latency and complete immunity from serverless container divergence.
+  2. **Smart Converter Type Auto-Detection:** `converter.js` accepts all supported formats (`.pdf, .docx, .doc, .jpg, .jpeg, .png, .webp, .bmp, .mp4, .mkv, .webm, .mov, .avi, .flv`). Added `detectToolForFiles(files)` which automatically detects uploaded file extensions and re-configures `activeTool`, updating the target format select before staging. Staging displays a prominent `⚡ Convert File Now` button and dropzone browse triggers.
+  3. **Universal YouTube & Generic Web Extractor Fallback:** Restored active `YtDlpService` extraction across `extractors/youtube.py` and added fallback in `extractors/generic.py`.
+  4. **Pure-Python DOCX to PDF Prioritization:** Prioritizes `_docx_to_pdf_fallback` (using `python-docx` + ReportLab) before any Windows Word COM calls, preventing fatal `0x800706be` RPC crashes on headless environments.

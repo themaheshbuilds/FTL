@@ -110,44 +110,43 @@ class ConverterService:
                 out_name = f"{safe_base}.pdf"
                 out_path = str(gen_dir / out_name)
 
-                # Attempt 1: Word COM on Windows
-                converted = False
-                word = None
-                wdoc = None
-                try:
-                    import win32com.client
-                    import pythoncom
-                    pythoncom.CoInitialize()
-                    word = win32com.client.DispatchEx("Word.Application")
-                    word.Visible = False
-                    word.DisplayAlerts = 0
-                    wdoc = word.Documents.Open(os.path.abspath(docx_path), ReadOnly=True)
-                    wdoc.SaveAs(os.path.abspath(out_path), FileFormat=17)  # wdFormatPDF
-                    converted = os.path.exists(out_path) and os.path.getsize(out_path) > 0
-                except Exception as com_err:
-                    logger.warning(f"Word COM conversion failed, trying fallback: {com_err}")
-                finally:
-                    if wdoc is not None:
-                        try:
-                            wdoc.Close(False)
-                        except Exception:
-                            pass
-                        del wdoc
-                    if word is not None:
-                        try:
-                            word.Quit()
-                        except Exception:
-                            pass
-                        del word
-                    try:
-                        import pythoncom
-                        pythoncom.CoUninitialize()
-                    except Exception:
-                        pass
+                # Attempt 1: Fast, deterministic pure-Python conversion (python-docx + ReportLab)
+                converted = cls._docx_to_pdf_fallback(docx_path, out_path)
 
-                # Attempt 2: Fallback ReportLab parser
+                # Attempt 2: Optional Word COM on Windows if pure-Python failed
                 if not converted:
-                    converted = cls._docx_to_pdf_fallback(docx_path, out_path)
+                    word = None
+                    wdoc = None
+                    try:
+                        import win32com.client
+                        import pythoncom
+                        pythoncom.CoInitialize()
+                        word = win32com.client.DispatchEx("Word.Application")
+                        word.Visible = False
+                        word.DisplayAlerts = 0
+                        wdoc = word.Documents.Open(os.path.abspath(docx_path), ReadOnly=True)
+                        wdoc.SaveAs(os.path.abspath(out_path), FileFormat=17)  # wdFormatPDF
+                        converted = os.path.exists(out_path) and os.path.getsize(out_path) > 0
+                    except Exception as com_err:
+                        logger.warning(f"Word COM conversion failed: {com_err}")
+                    finally:
+                        if wdoc is not None:
+                            try:
+                                wdoc.Close(False)
+                            except Exception:
+                                pass
+                            del wdoc
+                        if word is not None:
+                            try:
+                                word.Quit()
+                            except Exception:
+                                pass
+                            del word
+                        try:
+                            import pythoncom
+                            pythoncom.CoUninitialize()
+                        except Exception:
+                            pass
 
                 if not converted or not os.path.exists(out_path):
                     return False, None, None, None, None, "Could not convert DOCX to PDF."

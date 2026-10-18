@@ -90,8 +90,13 @@
             <div class="dropzone-icon">{{ tool.icon }}</div>
             <h3 class="dropzone-title">Drop your {{ tool.title }} files here</h3>
             <p class="dropzone-sub">
-              Drag &amp; drop or <span class="browse-link" id="tool-browse-btn">browse your device</span>
+              Drag &amp; drop or click below to browse your files
             </p>
+            <div style="margin-top: 14px;">
+              <button type="button" class="btn-primary" id="tool-browse-btn" style="padding: 10px 24px; font-size: 14px; cursor: pointer;">
+                {{ tool.icon }} Browse &amp; Select File
+              </button>
+            </div>
             <div class="file-chips-preview">
               {% for ext in tool.accept.split(',') %}
                 <span class="platform-chip">{{ ext.replace('.', '').upper() }}</span>

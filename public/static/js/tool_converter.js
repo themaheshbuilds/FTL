@@ -196,10 +196,20 @@ const DedicatedToolConverter = {
         if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
         if (fmtEl) fmtEl.textContent = (outputFormat || "FILE").toUpperCase();
 
+        const downloadUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
         if (dlBtn) {
-            const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
             dlBtn.href = downloadUrl;
             dlBtn.setAttribute("download", data.filename || "converted_file");
+        }
+
+        // AUTO-DOWNLOAD TRIGGER: Instantly downloads converted file to user's computer
+        if (downloadUrl) {
+            const autoLink = document.createElement("a");
+            autoLink.href = downloadUrl;
+            autoLink.setAttribute("download", data.filename || "converted_file");
+            document.body.appendChild(autoLink);
+            autoLink.click();
+            document.body.removeChild(autoLink);
         }
 
         // Reset email widget state

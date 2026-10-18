@@ -111,6 +111,11 @@ const ConverterApp = {
     init() {
         this.renderToolGrid("all");
         this.selectTool(this.tools[0].id);
+        const fileInput = document.getElementById("converter-file-input");
+        if (fileInput) {
+            fileInput.accept = ".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp,.bmp,.mp4,.mkv,.webm,.mov,.avi,.flv";
+            fileInput.multiple = true;
+        }
         this.bindEvents();
     },
 
@@ -242,16 +247,10 @@ const ConverterApp = {
             c.classList.toggle("active", c.getAttribute("data-tool-id") === toolId);
         });
 
-        // Update Dropzone hints and accepted extensions
-        const fileInput = document.getElementById("converter-file-input");
+        // Update Dropzone hints
         const toolBadge = document.getElementById("active-tool-badge");
         const dropzoneTitle = document.getElementById("active-dropzone-title");
         const dropzoneSub = document.getElementById("active-dropzone-sub");
-
-        if (fileInput) {
-            fileInput.accept = tool.accept;
-            fileInput.multiple = !!tool.multiple;
-        }
 
         if (toolBadge) toolBadge.innerHTML = `${tool.icon} ${tool.title}`;
         if (dropzoneTitle) dropzoneTitle.textContent = `Upload files for ${tool.title}`;
@@ -275,8 +274,44 @@ const ConverterApp = {
         }
     },
 
+    detectToolForFiles(files) {
+        if (!files || files.length === 0) return this.tools[0];
+        const firstExt = (files[0].name.split('.').pop() || "").toLowerCase();
+
+        // 1. Images
+        if (['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(firstExt)) {
+            if (files.length > 1) {
+                return this.tools.find(t => t.id === 'images_to_pdf') || this.tools.find(t => t.id === 'image_converter');
+            }
+            return this.tools.find(t => t.id === 'image_converter');
+        }
+
+        // 2. PDF
+        if (firstExt === 'pdf') {
+            return this.tools.find(t => t.id === 'pdf_to_images') || this.tools.find(t => t.id === 'pdf_to_docx');
+        }
+
+        // 3. Word Documents
+        if (['docx', 'doc'].includes(firstExt)) {
+            return this.tools.find(t => t.id === 'docx_to_pdf');
+        }
+
+        // 4. Video files
+        if (['mp4', 'mkv', 'webm', 'mov', 'avi', 'flv'].includes(firstExt)) {
+            return this.tools.find(t => t.id === 'video_to_audio') || this.tools.find(t => t.id === 'video_converter');
+        }
+
+        return this.activeTool || this.tools[0];
+    },
+
     handleFiles(files) {
         if (!files || files.length === 0) return;
+
+        // Automatically detect best converter tool based on uploaded file type
+        const autoTool = this.detectToolForFiles(files);
+        if (autoTool) {
+            this.selectTool(autoTool.id);
+        }
 
         if (this.activeTool && !this.activeTool.multiple) {
             this.selectedFiles = [files[0]];
@@ -389,10 +424,20 @@ const ConverterApp = {
         if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
         if (fmtEl) fmtEl.textContent = (document.getElementById("converter-format-select")?.value || "FILE").toUpperCase();
 
+        const downloadUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
         if (dlBtn) {
-            const downloadUrl = `/download/${encodeURIComponent(data.file_id)}`;
             dlBtn.href = downloadUrl;
             dlBtn.setAttribute("download", data.filename || "converted_file");
+        }
+
+        // AUTO-DOWNLOAD TRIGGER: Instantly downloads converted file to user's computer
+        if (downloadUrl) {
+            const autoLink = document.createElement("a");
+            autoLink.href = downloadUrl;
+            autoLink.setAttribute("download", data.filename || "converted_file");
+            document.body.appendChild(autoLink);
+            autoLink.click();
+            document.body.removeChild(autoLink);
         }
 
         // Reset email widget state
