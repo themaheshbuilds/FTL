@@ -56,6 +56,14 @@ class YouTubeExtractor(BaseExtractor):
                         title=title,
                         description=f"By {author}" if author else None
                     )
+                elif resp.status_code == 404:
+                    return AnalysisResult(
+                        success=False,
+                        platform="YouTube",
+                        content_type="video",
+                        error_code="VIDEO_NOT_FOUND",
+                        error_message="This YouTube video or Short does not exist or has been removed."
+                    )
             except Exception as e:
                 logger.debug(f"oEmbed fast path failed for {url}, falling back to yt-dlp: {e}")
 
