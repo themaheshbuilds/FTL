@@ -1,6 +1,5 @@
 import pytest
-from api.index import VercelWSGIMiddleware
-from app import create_app
+from app import create_app, VercelWSGIMiddleware
 from config import TestingConfig
 
 

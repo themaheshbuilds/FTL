@@ -112,6 +112,45 @@ def index():
     return render_template("index.html", tools=CONVERTER_TOOLS)
 
 
+@web_bp.route("/api/index", methods=["GET", "POST"], strict_slashes=False)
+@web_bp.route("/api/index.py", methods=["GET", "POST"], strict_slashes=False)
+def vercel_entrypoint():
+    """Universal dispatcher for Vercel serverless rewrites targeting /api/index."""
+    matched = request.headers.get("x-matched-path", "").strip()
+    clean = matched.split("?")[0].strip() if matched else ""
+
+    # 1. API endpoint dispatch for POST requests
+    if request.method == "POST":
+        if clean.endswith("/analyze"):
+            from routes.api import analyze_endpoint
+            return analyze_endpoint()
+        elif clean.endswith("/generate"):
+            from routes.api import generate_endpoint
+            return generate_endpoint()
+        elif clean.endswith("/convert"):
+            from routes.converter import convert_endpoint
+            return convert_endpoint()
+        elif clean.endswith("/send-email"):
+            from routes.email import send_email_endpoint
+            return send_email_endpoint()
+
+    # 2. Web page dispatch
+    if clean in ("/downloader", "/downloader.html", "/download"):
+        return render_template("downloader.html")
+    elif clean in ("/converter", "/converter.html", "/converters", "/convert", "/files", "/file", "/file-converter", "/file-converters"):
+        return render_template("converter.html", tools=CONVERTER_TOOLS)
+    elif clean.startswith("/converter/") or clean.startswith("/files/") or clean.startswith("/tool/"):
+        slug = clean.rstrip("/").split("/")[-1]
+        tool = CONVERTER_TOOLS.get(slug)
+        if tool:
+            other_tools = [t for s, t in CONVERTER_TOOLS.items() if s != slug]
+            return render_template("tool_converter.html", tool=tool, other_tools=other_tools)
+    elif clean == "/favicon.ico":
+        return ("", 204)
+
+    return render_template("index.html", tools=CONVERTER_TOOLS)
+
+
 @web_bp.route("/downloader", methods=["GET"], strict_slashes=False)
 @web_bp.route("/downloader.html", methods=["GET"], strict_slashes=False)
 @web_bp.route("/download", methods=["GET"], strict_slashes=False)
