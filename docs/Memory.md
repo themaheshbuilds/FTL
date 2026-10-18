@@ -399,10 +399,23 @@ pytest -v
     - If the browser explicitly requests `text/html` and is not hitting an `/api/` route, it renders `templates/error.html` with full LinkForge Peach styling and a prominent "Return to Home" button.
     - If an API or programmatic client requests a missing resource (or for `/api/*` routes), it returns structured JSON (`code: "NOT_FOUND"`).
 
-### 3. Response Cache-Busting & Stale Service Worker Neutralization
-- In `app.py`, an `@app.after_request` hook injects `Cache-Control: no-cache, no-store, must-revalidate, max-age=0` on all HTML responses to prevent intermediate proxy or browser cache locking.
-- In `templates/`, an inline head script unregisters any active Service Workers and clears CacheStorage to prevent outdated offline cache intercepts during deployment updates.
-
-
-
-
+### 4. Vercel `__route=/$1` Wildcard Rewrite & Dedicated Page Segregation
+- **The Problem:** In Vercel serverless deployments, `x-matched-path` is an edge response header, NOT an inbound HTTP request header delivered to the WSGI environment. Because `HTTP_X_MATCHED_PATH` was empty, the previous WSGI middleware fell back to setting `PATH_INFO = "/"`, trapping users on the Home page (`index.html`) whenever they clicked top navigation tabs (`/downloader`, `/converter`) or standalone tool cards (`/converter/<slug>`). Additionally, `index.html` previously embedded the full downloader input form directly on the page, creating an overcrowded experience rather than clean, segregated pages.
+- **The Solution:**
+  1. **Rewrite Rule in `vercel.json`:**
+     ```json
+     {
+       "source": "/((?!static/).*)",
+       "destination": "/api/index?__route=/$1"
+     }
+     ```
+     Excludes `/static/` so CSS/JS are served directly by Vercel CDN, while passing the exact requested path (`$1`) into the `__route` query parameter.
+  2. **Query Route Decoding in `VercelWSGIMiddleware` (`app.py`):**
+     Inspects `environ["QUERY_STRING"]` for `__route=`. When found, it normalizes `environ["PATH_INFO"] = clean_route` and strips `__route` from the query string so Flask route decorators (`@web_bp.route("/downloader")`, `@web_bp.route("/converter")`, etc.) execute natively.
+  3. **Fallback in `routes/web.py` (`vercel_entrypoint`):**
+     Also inspects `request.args.get("__route")` as a secondary defense layer for direct serverless dispatches.
+  4. **Clean Page Segregation:**
+     - `/` (`templates/index.html`): High-level Suite Portal featuring two primary workspace cards (`Launch Downloader →` and `Browse Converters →`) plus 7 standalone tool cards.
+     - `/downloader` (`templates/downloader.html`): Dedicated Link Downloader page with active header pill and full downloader workflow.
+     - `/converter` & `/files` (`templates/converter.html`): Dedicated File Converter Hub with active header pill and universal multi-file converter.
+     - `/converter/<tool_slug>` (`templates/tool_converter.html`): Standalone single-purpose conversion tool pages.

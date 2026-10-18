@@ -16,11 +16,9 @@ def test_index_page_loads(client):
     assert response.status_code == 200
     assert b"LINKFORGE" in response.data
     assert b"One Link. Any File." in response.data
-    assert b"url-input" in response.data
-    assert b"analyze-btn" in response.data
-    assert b"options-view" in response.data
-    assert b"format-cards-grid" in response.data
-    assert b"res-platform" in response.data
+    assert b"/downloader" in response.data
+    assert b"/converter" in response.data
+    assert b"Universal Downloader" in response.data
 
 
 def test_static_css_assets_accessible(client):

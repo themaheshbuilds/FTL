@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, abort
+import re
+from flask import Blueprint, render_template, abort, request
 
 web_bp = Blueprint("web", __name__)
 
@@ -116,8 +117,10 @@ def index():
 @web_bp.route("/api/index.py", methods=["GET", "POST"], strict_slashes=False)
 def vercel_entrypoint():
     """Universal dispatcher for Vercel serverless rewrites targeting /api/index."""
+    route_arg = request.args.get("__route", "").strip()
     matched = request.headers.get("x-matched-path", "").strip()
-    clean = matched.split("?")[0].strip() if matched else ""
+    raw_target = route_arg or (matched.split("?")[0].strip() if matched else "")
+    clean = re.sub(r"^/+", "/", raw_target) if raw_target else ""
 
     # 1. API endpoint dispatch for POST requests
     if request.method == "POST":

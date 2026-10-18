@@ -1,4 +1,6 @@
 import os
+import re
+import urllib.parse
 from pathlib import Path
 from flask import Flask, jsonify, request, render_template
 from config import get_config, Config
@@ -108,15 +110,34 @@ class VercelWSGIMiddleware:
         self.wsgi_app = wsgi_app
 
     def __call__(self, environ, start_response):
-        matched_path = environ.get("HTTP_X_MATCHED_PATH", "")
+        query_string = environ.get("QUERY_STRING", "")
         current_path = environ.get("PATH_INFO", "")
 
-        if current_path in ("/api/index", "/api/index.py", "/api", ""):
-            if matched_path and matched_path not in ("/api/index", "/api/index.py", "/api", "/404"):
-                clean = matched_path.split("?")[0].strip()
-                if not clean.startswith("/"):
-                    clean = "/" + clean
-                environ["PATH_INFO"] = clean
+        # 1. Primary mechanism: Route captured in query parameter (?__route=/...)
+        if "__route=" in query_string:
+            params = urllib.parse.parse_qs(query_string, keep_blank_values=True)
+            if "__route" in params and params["__route"]:
+                raw_route = params["__route"][0].strip()
+                clean_route = re.sub(r"^/+", "/", raw_route) if raw_route else "/"
+                environ["PATH_INFO"] = clean_route
+
+                # Remove internal __route param from QUERY_STRING
+                del params["__route"]
+                environ["QUERY_STRING"] = urllib.parse.urlencode(params, doseq=True)
+
+        # 2. Secondary fallback: Check proxy / CDN path headers
+        elif current_path in ("/api/index", "/api/index.py", "/api", ""):
+            for header_key in (
+                "HTTP_X_FORWARDED_URI",
+                "HTTP_X_ORIGINAL_URI",
+                "HTTP_X_VERCEL_PATH",
+                "HTTP_X_MATCHED_PATH",
+            ):
+                val = environ.get(header_key, "")
+                if val and val not in ("/api/index", "/api/index.py", "/api", "/404"):
+                    clean = re.sub(r"^/+", "/", val.split("?")[0].strip())
+                    environ["PATH_INFO"] = clean
+                    break
             else:
                 environ["PATH_INFO"] = "/"
 

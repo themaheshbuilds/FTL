@@ -7,7 +7,7 @@
   <meta name="description" content="Download media from Instagram, YouTube, TikTok, Reddit, X, LinkedIn &amp; Facebook, or convert PDFs, documents, audio, video, and images in seconds.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261015">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261018">
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -70,227 +70,92 @@
           <span class="hero-title-grad">File Converter Suite</span>
         </h1>
         <p class="hero-subtitle">
-          Download high-quality media from any social link, or convert PDFs, documents, videos, and images with zero cloud retention and direct email delivery.
+          Download high-quality media from any link, or convert PDFs, documents, audio, videos, and images in separate, dedicated workspaces.
         </p>
         <div class="hero-actions">
-          <a href="#quick-downloader" class="btn-primary hero-cta-btn">&#x26A1; Quick Downloader</a>
-          <a href="#converter-suite" class="btn-secondary hero-cta-btn">&#x21C4; Dedicated Converters</a>
+          <a href="/downloader" class="btn-primary hero-cta-btn">&#x26A1; Launch Downloader</a>
+          <a href="/converter" class="btn-secondary hero-cta-btn">&#x21C4; Browse Converters</a>
         </div>
       </section>
 
-      <!-- 1. Quick Downloader Working Card -->
-      <div class="glass-card" id="quick-downloader">
-        <div class="section-card-badge">&#x1F517; QUICK LINK DOWNLOADER</div>
-
-        <!-- 1. Input View -->
-        <div id="input-view">
-          <div class="url-input-container">
-            <form id="url-form" autocomplete="off">
-              <div class="url-input-bar">
-                <span class="url-icon">&#x1F517;</span>
-                <input
-                  type="url"
-                  id="url-input"
-                  class="main-input"
-                  placeholder="Paste URL here (Instagram, YouTube, TikTok, Reddit, X, LinkedIn...)"
-                  required
-                  spellcheck="false"
-                >
-                <div class="input-actions">
-                  <button type="button" class="icon-button" id="paste-btn" title="Paste from clipboard">
-                    <span>&#x1F4CB;</span> Paste
-                  </button>
-                  <button type="button" class="icon-button clear-btn" id="clear-btn" style="display:none" title="Clear input">
-                    &#x2715;
-                  </button>
-                </div>
-                <button type="submit" class="btn-primary" id="analyze-btn">
-                  Analyze Link &#x2192;
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- Platform Chips -->
-          <div class="platform-section">
-            <div class="platform-title">Quick Supported Platforms</div>
-            <div class="platform-chips-row">
-              <div class="platform-chip ig"><span>&#x1F4F8;</span> Instagram</div>
-              <div class="platform-chip yt"><span>&#x25B6;&#xFE0F;</span> YouTube</div>
-              <div class="platform-chip tt"><span>&#x1F3B5;</span> TikTok</div>
-              <div class="platform-chip rd"><span>&#x1F916;</span> Reddit</div>
-              <div class="platform-chip li"><span>&#x1F4BC;</span> LinkedIn</div>
-              <div class="platform-chip"><span>&#x1D54F;</span> X (Twitter)</div>
-              <div class="platform-chip fb"><span>&#x1F464;</span> Facebook</div>
-              <div class="platform-chip"><span>&#x1F310;</span> Direct Files</div>
+      <!-- Primary Feature Portal Grid -->
+      <section class="portal-grid">
+        
+        <!-- Portal Card 1: Link Downloader -->
+        <div class="portal-card">
+          <div>
+            <div class="portal-card-badge">&#x1F517; DEDICATED WORKSPACE</div>
+            <h2 class="portal-card-title">Universal Link Downloader</h2>
+            <p class="portal-card-desc">
+              Download videos, reels, photos, audio tracks, and documents from social media and direct URLs. Choose between original video MP4, high-bitrate MP3 audio, or full carousel archives.
+            </p>
+            <div class="portal-chips-row">
+              <span class="portal-chip">&#x1F4F8; Instagram</span>
+              <span class="portal-chip">&#x25B6;&#xFE0F; YouTube</span>
+              <span class="portal-chip">&#x1F3B5; TikTok</span>
+              <span class="portal-chip">&#x1F916; Reddit</span>
+              <span class="portal-chip">&#x1F4BC; LinkedIn</span>
+              <span class="portal-chip">&#x1D54F; X (Twitter)</span>
+              <span class="portal-chip">&#x1F464; Facebook</span>
+              <span class="portal-chip">&#x1F310; Direct Links</span>
             </div>
           </div>
-        </div>
-
-        <!-- 2. Loading View -->
-        <div id="loading-view" class="loading-view hidden">
-          <div class="spinner-ring"></div>
-          <h3 class="loading-title">Analyzing Link...</h3>
-          <p class="loading-subtitle">Extracting content structure and media streams</p>
-          <div class="analysis-steps">
-            <div class="step-item active" id="step-platform">
-              <span class="step-dot"></span> Platform
-            </div>
-            <div class="step-item" id="step-content">
-              <span class="step-dot"></span> Content Type
-            </div>
-            <div class="step-item" id="step-media">
-              <span class="step-dot"></span> Media Streams
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. Options View -->
-        <div id="options-view" class="hidden">
-          <div class="result-header">
-            <div>
-              <div class="result-meta-top">
-                <span class="badge-platform" id="res-platform">Platform</span>
-                <span class="badge-type" id="res-type">Media</span>
-              </div>
-              <h2 class="result-title" id="res-title">Content Detected</h2>
-              <p class="result-summary" id="res-summary">Ready to package.</p>
-            </div>
-            <button type="button" class="btn-secondary" id="btn-reset-options">&#x2190; Back</button>
-          </div>
-
-          <!-- Preview Area -->
-          <div class="preview-container" id="preview-container"></div>
-
-          <!-- Format Selection -->
-          <div class="format-section-title">Select Output Package Format</div>
-          <div class="format-cards-grid" id="format-cards-grid"></div>
-
-          <!-- Custom Settings -->
-          <div class="settings-row">
-            <div class="setting-group" id="quality-setting-group" style="display:none">
-              <label class="setting-label" for="quality-select">Video Quality</label>
-              <select id="quality-select" class="styled-select"></select>
-            </div>
-            <div class="setting-group">
-              <label class="setting-label" for="custom-filename-input">Custom Filename (Optional)</label>
-              <input type="text" id="custom-filename-input" class="styled-input" placeholder="e.g. vacation_highlight">
-            </div>
-            <div class="setting-group" id="caption-setting-group" style="display:none;justify-content:flex-end">
-              <label class="caption-toggle-box">
-                <input type="checkbox" id="include-caption-checkbox">
-                <span class="caption-label-text">Include caption text file</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Download Action -->
-          <div style="text-align:center;margin-top:20px">
-            <button type="button" class="btn-primary" id="btn-start-download" style="min-width:240px;font-size:16px;padding:14px 32px">
-              &#x2193; Download File Now
-            </button>
-          </div>
-        </div>
-
-        <!-- 4. Downloading / Packaging View -->
-        <div id="downloading-view" class="loading-view hidden">
-          <div class="spinner-ring"></div>
-          <h3 class="loading-title">Packaging Your File...</h3>
-          <p class="loading-subtitle">Merging streams and building your high-speed package</p>
-        </div>
-
-        <!-- 5. Success View -->
-        <div id="success-view" class="success-view hidden">
-          <div class="success-badge-icon">&#x2713;</div>
-          <h2 class="success-title">Your File is Ready!</h2>
-          <p class="success-subtitle">Download your file directly or send it straight to your email inbox.</p>
-
-          <div class="file-info-box">
-            <div class="file-info-row">
-              <span class="info-key">Filename</span>
-              <span class="info-value" id="success-filename">file</span>
-            </div>
-            <div class="file-info-row">
-              <span class="info-key">File Size</span>
-              <span class="info-value" id="success-filesize">0 MB</span>
-            </div>
-            <div class="file-info-row">
-              <span class="info-key">Format</span>
-              <span class="info-value" id="success-format">FILE</span>
-            </div>
-          </div>
-
-          <div class="success-actions">
-            <a href="#" class="btn-primary" id="direct-download-btn" style="padding:14px 28px;font-size:15px">
-              &#x2193; Direct Download
+          <div>
+            <a href="/downloader" class="btn-primary portal-cta-btn">
+              <span>&#x26A1; Open Downloader</span>
+              <span>&#x2192;</span>
             </a>
-            <button type="button" class="btn-secondary" id="btn-reset-success">
-              Download Another Link
-            </button>
-          </div>
-
-          <!-- Email Delivery Widget -->
-          <div class="email-delivery-widget" id="email-widget">
-            <div class="email-toggle-button" id="email-toggle-btn">
-              <span class="email-toggle-title">
-                <span>&#x2709;&#xFE0F;</span> Send this file to your email
-              </span>
-              <span class="email-toggle-arrow">&#x25BC;</span>
-            </div>
-            <div class="email-form-panel">
-              <div class="email-input-row">
-                <input
-                  type="email"
-                  class="email-input-field"
-                  id="email-input"
-                  placeholder="Enter your email address..."
-                  autocomplete="email"
-                >
-                <button type="button" class="email-send-button" id="email-send-btn">
-                  Send
-                </button>
-              </div>
-              <div class="email-status-message" id="email-status-message"></div>
-            </div>
           </div>
         </div>
 
-        <!-- 6. Error View -->
-        <div id="error-view" class="error-view hidden">
-          <div class="error-badge-icon">&#x26A0;</div>
-          <h2 class="error-title">Could Not Process Link</h2>
-          <p class="error-message" id="error-message">
-            Unable to access or extract media from this URL. Please verify the link is public and accessible.
-          </p>
-          <button type="button" class="btn-primary" id="btn-reset-error" style="min-width:180px">
-            Try Another Link
-          </button>
+        <!-- Portal Card 2: File Converters -->
+        <div class="portal-card">
+          <div>
+            <div class="portal-card-badge">&#x21C4; DEDICATED WORKSPACE</div>
+            <h2 class="portal-card-title">Universal File Converter</h2>
+            <p class="portal-card-desc">
+              Batch convert documents, PDFs, audio, videos, and images locally in seconds. Process multiple files privately in sandboxed memory with zero cloud retention and direct email delivery.
+            </p>
+            <div class="portal-chips-row">
+              <span class="portal-chip">&#x1F4C4; PDF Document</span>
+              <span class="portal-chip">&#x1F4DD; Word (DOCX)</span>
+              <span class="portal-chip">&#x1F3A5; MP4 Video</span>
+              <span class="portal-chip">&#x1F3A7; MP3 Audio</span>
+              <span class="portal-chip">&#x1F5BC;&#xFE0F; WebP Images</span>
+              <span class="portal-chip">&#x1F3AC; MKV / WebM</span>
+              <span class="portal-chip">&#x1F3A8; PNG / JPG</span>
+            </div>
+          </div>
+          <div>
+            <a href="/converter" class="btn-primary portal-cta-btn">
+              <span>&#x21C4; Open Converter Hub</span>
+              <span>&#x2192;</span>
+            </a>
+          </div>
         </div>
 
-      </div>
+      </section>
 
-      <!-- 2. Dedicated Converter Suite Section -->
+      <!-- 2. Standalone Dedicated Converters Grid -->
       <section class="section-suite" id="converter-suite">
-        <div class="section-header">
-          <div class="section-badge">&#x21C4; DEDICATED CONVERTERS</div>
-          <h2 class="section-title">Separate Pages for Every Converter</h2>
-          <p class="section-subtitle">
-            Click any converter below to jump to its dedicated high-speed workspace with drag-and-drop support, custom format settings, and direct email delivery.
-          </p>
+        <div class="suite-header">
+          <div class="section-card-badge">&#x21C4; STANDALONE CONVERTERS</div>
+          <h2 class="suite-title">Specialized Tool Converters</h2>
+          <p class="suite-subtitle">Direct, zero-setup conversion pages fine-tuned for specific document and media workflows.</p>
         </div>
 
         <div class="suite-grid">
-          
+
           <!-- Tool 1: PDF to Images -->
           <a href="/converter/pdf-to-images" class="suite-card">
             <div class="suite-card-top">
               <span class="suite-card-icon">&#x1F4C4;</span>
-              <span class="suite-card-badge">PDF &#x2192; JPG/PNG</span>
+              <span class="suite-card-badge">PDF &#x2192; JPG / PNG</span>
             </div>
             <h3 class="suite-card-title">PDF to Images</h3>
-            <p class="suite-card-desc">Extract all pages of any PDF into high-resolution JPG or PNG images inside a ZIP archive.</p>
+            <p class="suite-card-desc">Extract every page of any PDF into high-resolution JPG or PNG images inside a tidy ZIP archive.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -303,7 +168,7 @@
             <h3 class="suite-card-title">Images to PDF</h3>
             <p class="suite-card-desc">Merge multiple JPG, PNG, or WebP images into a single crisp, multi-page PDF document.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -311,12 +176,12 @@
           <a href="/converter/video-to-audio" class="suite-card">
             <div class="suite-card-top">
               <span class="suite-card-icon">&#x1F3A7;</span>
-              <span class="suite-card-badge">Video &#x2192; MP3/M4A</span>
+              <span class="suite-card-badge">Video &#x2192; MP3 / M4A</span>
             </div>
             <h3 class="suite-card-title">Video to Audio</h3>
             <p class="suite-card-desc">Extract 192kbps crystal-clear MP3 or lossless AAC/M4A audio from any MP4, MKV, WebM, or MOV video.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -329,7 +194,7 @@
             <h3 class="suite-card-title">Word (DOCX) to PDF</h3>
             <p class="suite-card-desc">Convert Microsoft Word documents (.docx) to PDF with preserved layout, tables, and typography.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -342,7 +207,7 @@
             <h3 class="suite-card-title">PDF to Word (DOCX)</h3>
             <p class="suite-card-desc">Extract text, tables, and layout from PDF files into an editable Microsoft Word document.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -350,12 +215,12 @@
           <a href="/converter/video-converter" class="suite-card">
             <div class="suite-card-top">
               <span class="suite-card-icon">&#x1F3AC;</span>
-              <span class="suite-card-badge">Video &#x2192; MP4/MKV</span>
+              <span class="suite-card-badge">Video &#x2192; MP4 / MKV</span>
             </div>
             <h3 class="suite-card-title">Video Transcoder</h3>
             <p class="suite-card-desc">Transcode and compress video files across MP4, MKV, and WebM container formats smoothly.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -363,12 +228,12 @@
           <a href="/converter/image-converter" class="suite-card">
             <div class="suite-card-top">
               <span class="suite-card-icon">&#x1F3A8;</span>
-              <span class="suite-card-badge">PNG/JPG &#x2192; WebP</span>
+              <span class="suite-card-badge">PNG / JPG &#x2192; WebP</span>
             </div>
             <h3 class="suite-card-title">Image Converter</h3>
             <p class="suite-card-desc">Convert and compress images between WebP (ultra-compressed), lossless PNG, and standard JPG.</p>
             <div class="suite-card-footer">
-              <span class="suite-card-link">Open Dedicated Page &#x2192;</span>
+              <span class="suite-card-link">Launch Tool &#x2192;</span>
             </div>
           </a>
 
@@ -409,6 +274,10 @@
           <h4>Universal Media Downloader &amp; File Converter</h4>
           <p>
             LinkForge is a unified suite designed to download media from social links and convert documents, media, and images locally with zero cloud retention.
+          </p>
+          <h4>Dedicated Workspaces</h4>
+          <p>
+            Visit the Link Downloader for social link downloads, or the File Converters hub and standalone tool pages for document and media transformation.
           </p>
           <h4>Privacy Guaranteed</h4>
           <p>
@@ -457,6 +326,35 @@
 
   </div>
 
-  <script src="{{ url_for('static', filename='js/downloader.js') }}?v=20261015"></script>
+  <script>
+    // Modal controls for Home Portal page
+    const aboutModal = document.getElementById('about-modal');
+    const platformsModal = document.getElementById('platforms-modal');
+    const openAboutBtn = document.getElementById('open-about-modal');
+    const closeAboutBtn = document.getElementById('close-about-modal');
+    const openPlatformsBtn = document.getElementById('open-platforms-modal');
+    const closePlatformsBtn = document.getElementById('close-platforms-modal');
+
+    if (openAboutBtn && aboutModal) {
+      openAboutBtn.addEventListener('click', () => { aboutModal.style.display = 'flex'; });
+    }
+    if (closeAboutBtn && aboutModal) {
+      closeAboutBtn.addEventListener('click', () => { aboutModal.style.display = 'none'; });
+    }
+    if (openPlatformsBtn && platformsModal) {
+      openPlatformsBtn.addEventListener('click', () => { platformsModal.style.display = 'flex'; });
+    }
+    if (closePlatformsBtn && platformsModal) {
+      closePlatformsBtn.addEventListener('click', () => { platformsModal.style.display = 'none'; });
+    }
+
+    [aboutModal, platformsModal].forEach(modal => {
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.style.display = 'none';
+        });
+      }
+    });
+  </script>
 </body>
 </html>
