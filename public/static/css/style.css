@@ -1765,6 +1765,8 @@ body::before {
   font-size: 15px;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
 /* Portal Cards on Home Page */
 .portal-grid {
   display: grid;
