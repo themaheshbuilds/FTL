@@ -500,6 +500,7 @@ class YtDlpService:
         opts = cls.get_default_opts(custom_opts)
 
         cls.last_download_error = ""
+        download_success = False
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -512,14 +513,28 @@ class YtDlpService:
             fallback_opts.pop("cookiefile", None)
             if format_filter in ("audio", "m4a", "mp3"):
                 fallback_opts["format"] = "bestaudio/best"
+                fallback_opts["extractor_args"] = {
+                    "youtube": {
+                        "player_client": ["visionos", "web"],
+                        "player_skip": ["configs"]
+                    }
+                }
+            elif not ffmpeg_bin:
+                fallback_opts["format"] = "best[ext=mp4]/best/18"
+                fallback_opts["extractor_args"] = {
+                    "youtube": {
+                        "player_client": ["android", "web"],
+                        "player_skip": ["configs"]
+                    }
+                }
             else:
                 fallback_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
-            fallback_opts["extractor_args"] = {
-                "youtube": {
-                    "player_client": ["visionos", "web"],
-                    "player_skip": ["configs"]
+                fallback_opts["extractor_args"] = {
+                    "youtube": {
+                        "player_client": ["visionos", "web"],
+                        "player_skip": ["configs"]
+                    }
                 }
-            }
             try:
                 with yt_dlp.YoutubeDL(fallback_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
