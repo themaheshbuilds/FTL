@@ -487,6 +487,15 @@ class YtDlpService:
             else:
                 custom_opts["format"] = format_filter
 
+        is_youtube = bool(re.search(r"(?:youtube\.com|youtu\.be)", url, re.IGNORECASE))
+        if is_youtube:
+            custom_opts["extractor_args"] = {
+                "youtube": {
+                    "player_client": ["ios", "mweb", "android"],
+                    "player_skip": ["webpage", "configs"]
+                }
+            }
+
         opts = cls.get_default_opts(custom_opts)
 
         download_success = False
@@ -497,13 +506,13 @@ class YtDlpService:
                     download_success = True
         except Exception as e:
             logger.warning(f"Primary download trial failed for {url}: {e}. Attempting mobile client fallback...")
-            # Fallback for cloud/bot challenges: mobile android client without cookies
+            # Fallback for cloud/bot challenges: mobile ios/mweb clients without cookies
             fallback_opts = dict(opts)
             fallback_opts.pop("cookiefile", None)
             fallback_opts["format"] = "best[ext=mp4]/best/18"
             fallback_opts["extractor_args"] = {
                 "youtube": {
-                    "player_client": ["android"],
+                    "player_client": ["ios", "mweb", "android"],
                     "player_skip": ["webpage", "configs"]
                 }
             }

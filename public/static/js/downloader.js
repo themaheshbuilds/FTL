@@ -458,12 +458,34 @@ const DownloaderApp = {
                 videos.forEach((vid, i) => {
                     const card = document.createElement("div");
                     card.className = "video-item-card";
+
+                    const isYouTube = (data.platform === "YouTube") || (vid.url && /(?:youtube\.com|youtu\.be)/i.test(vid.url));
+                    const ytMatch = (vid.url || this.currentUrl || "").match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+                    const ytId = ytMatch ? ytMatch[1] : null;
+
+                    let previewHtml = "";
+                    if (isYouTube && ytId) {
+                        previewHtml = `
+                            <iframe
+                                src="https://www.youtube-nocookie.com/embed/${ytId}?autoplay=0"
+                                title="${vid.title || 'YouTube Video'}"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowfullscreen
+                                style="width:100%;height:220px;border:none;border-radius:10px;background:#000;">
+                            </iframe>
+                        `;
+                    } else if (vid.url && !vid.url.includes("youtube.com") && !vid.url.includes("youtu.be")) {
+                        previewHtml = `<video controls preload="metadata" poster="${vid.thumbnail_url || ''}" src="${vid.url}"></video>`;
+                    } else {
+                        previewHtml = `
+                            <img src="${vid.thumbnail_url || ''}" alt="Video thumbnail">
+                            <div class="video-play-badge">&#x25B6;</div>
+                        `;
+                    }
+
                     card.innerHTML = `
                         <div class="video-preview-wrapper">
-                            ${vid.url ? `<video controls preload="metadata" poster="${vid.thumbnail_url || ''}" src="${vid.url}"></video>` : `
-                                <img src="${vid.thumbnail_url || ''}" alt="Video thumbnail">
-                                <div class="video-play-badge">&#x25B6;</div>
-                            `}
+                            ${previewHtml}
                         </div>
                         <div class="video-item-info">
                             <div class="video-item-title">${vid.title || `Video #${i + 1}`}</div>
