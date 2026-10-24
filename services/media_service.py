@@ -180,9 +180,27 @@ class MediaService:
                 if not downloaded_file or not os.path.exists(downloaded_file):
                     if target_items:
                         target_item = next((item for item in target_items if item.media_type in ("video", "audio")), target_items[0])
-                        ok, dpath, err = GenericDownloader.download_file(target_item.url, str(temp_dir), target_item.filename)
-                        if ok and dpath and os.path.exists(dpath):
-                            downloaded_file = dpath
+                        # Only download if target_item.url is NOT a YouTube watch page
+                        is_yt_page = bool(target_item and target_item.url and any(d in target_item.url for d in ("youtube.com", "youtu.be")))
+                        if not is_yt_page and target_item and target_item.url:
+                            ok, dpath, err = GenericDownloader.download_file(target_item.url, str(temp_dir), target_item.filename)
+                            if ok and dpath and os.path.exists(dpath):
+                                downloaded_file = dpath
+
+                # Validate downloaded file is not an HTML error or challenge page
+                if downloaded_file and os.path.exists(downloaded_file):
+                    try:
+                        with open(downloaded_file, "rb") as chk_f:
+                            chk_head = chk_f.read(512).lower()
+                            if b"<!doctype html" in chk_head or b"<html" in chk_head:
+                                logger.warning(f"Downloaded file {downloaded_file} is HTML webpage, rejecting.")
+                                try:
+                                    os.remove(downloaded_file)
+                                except Exception:
+                                    pass
+                                downloaded_file = None
+                    except Exception:
+                        pass
 
                 if not downloaded_file or not os.path.exists(downloaded_file):
                     return False, None, None, None, None, "Could not extract or download this media. It may be restricted or unsupported."

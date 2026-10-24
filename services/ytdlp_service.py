@@ -134,6 +134,7 @@ class YtDlpService:
             os.getenv("INSTAGRAM_COOKIES")
             or os.getenv("COOKIES_TEXT")
             or os.getenv("YOUTUBE_COOKIES")
+            or os.getenv("REDDIT_COOKIES")
             or os.getenv("COOKIES")
         )
         if raw_cookies:
@@ -182,12 +183,8 @@ class YtDlpService:
             "ignoreerrors": True,
             "nocheckcertificate": False,
             "windowsfilenames": True,
+            "restrictfilenames": True,
             "geo_bypass": True,
-            "referer": "https://www.youtube.com/",
-            "http_headers": {
-                "Referer": "https://www.youtube.com/",
-                "Origin": "https://www.youtube.com",
-            },
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         }
 
@@ -467,14 +464,14 @@ class YtDlpService:
             else:
                 custom_opts["format"] = "best[height<=480][ext=mp4]/best[ext=mp4]/18/best"
         else:
-            # Default "best" = MAXIMUM QUALITY available (4K, 1440p, 1080p full HD merged)
+            # Default "best" = Fast 720p HD merged (avoids 4K/1080p 300MB multi-minute downloads)
             if ffmpeg_bin:
-                custom_opts["format"] = "bestvideo+bestaudio/best"
+                custom_opts["format"] = "bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4]/best"
                 custom_opts["merge_output_format"] = "mp4"
                 custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
             else:
-                custom_opts["format"] = "best[ext=mp4]/best/18"
+                custom_opts["format"] = "best[height<=720][ext=mp4]/best[ext=mp4]/18/best"
 
         opts = cls.get_default_opts(custom_opts)
 
