@@ -531,24 +531,24 @@ const Analyzer = {
                 if (mirrorLocal) {
                     mirrorLocal.onclick = async () => {
                         mirrorLocal.disabled = true;
-                        mirrorLocal.innerHTML = `<span>⏳</span> Connecting to localhost:5000...`;
+                        mirrorLocal.innerHTML = `<span>⏳</span> Connecting to localhost:5001...`;
                         try {
-                            const res = await fetch("http://127.0.0.1:5000/api/analyze", {
+                            const res = await fetch("http://127.0.0.1:5001/api/analyze", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ url: targetUrl })
                             });
                             const data = await res.json();
                             if (res.ok && data.success) {
-                                window.open(`http://127.0.0.1:5000/?url=${encodeURIComponent(targetUrl)}`, "_blank");
+                                window.open(`http://127.0.0.1:5001/?url=${encodeURIComponent(targetUrl)}`, "_blank");
                             } else {
                                 alert("Local server is reachable but reported: " + ((data.error && data.error.message) || "Unknown issue"));
                             }
                         } catch (e) {
-                            alert("Local server on port 5000 is not running. To use the local engine, run 'python app.py' in your terminal!");
+                            alert("Local server on port 5001 is not running. To use the local engine, run 'python app.py' in your terminal!");
                         } finally {
                             mirrorLocal.disabled = false;
-                            mirrorLocal.innerHTML = `<span>💻</span> Local App (Port 5000)`;
+                            mirrorLocal.innerHTML = `<span>💻</span> Local App (Port 5001)`;
                         }
                     };
                 }
