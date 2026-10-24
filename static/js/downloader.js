@@ -900,7 +900,7 @@ const DownloaderApp = {
         if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
         if (fmtEl) fmtEl.textContent = (format || this.selectedFormat || "FILE").toUpperCase();
 
-        const rawUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
+        const rawUrl = data.data_url || data.direct_url || data.download_url || `/download/${encodeURIComponent(data.file_id)}`;
         const downloadUrl = data.data_url ? this.dataUrlToBlobUrl(data.data_url) : rawUrl;
         if (dlBtn) {
             dlBtn.href = downloadUrl;

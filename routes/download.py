@@ -36,6 +36,11 @@ def download_file(file_id: str):
             }
         }), 404
 
+    if getattr(job, "direct_url", None):
+        from flask import redirect
+        logger.info(f"Redirecting download for job {file_id} to direct URL: {job.output_filename}")
+        return redirect(job.direct_url, code=302)
+
     if not job.output_file_path or not os.path.exists(job.output_file_path):
         return jsonify({
             "success": False,

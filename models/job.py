@@ -14,6 +14,7 @@ class Job:
     output_file_path: Optional[str] = None
     filesize: Optional[int] = None
     mime_type: Optional[str] = None
+    direct_url: Optional[str] = None
     created_at: float = field(default_factory=time.time)
     expires_at: Optional[float] = None
     error_code: Optional[str] = None

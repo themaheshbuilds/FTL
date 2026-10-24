@@ -566,3 +566,58 @@ class YtDlpService:
         # Pick largest/newest completed candidate file
         candidates.sort(key=lambda c: (c[1], c[2]), reverse=True)
         return candidates[0][0]
+
+    @classmethod
+    def get_direct_stream_url(cls, url: str, quality: str = "best") -> Tuple[Optional[str], Optional[int], Optional[str]]:
+        """Extract direct progressive or high-res stream URL for instant browser delivery on serverless.
+        Returns: (stream_url, filesize, ext)
+        """
+        info, _ = cls.extract_info(url)
+        if not info:
+            return None, None, None
+        formats = info.get("formats") or []
+
+        quality_map = {
+            "1080p": 1080,
+            "720p": 720,
+            "480p": 480,
+            "360p": 360,
+            "240p": 240,
+            "144p": 144
+        }
+        target_height = quality_map.get(quality)
+
+        if target_height:
+            matched = [
+                f for f in formats
+                if f.get("url") and "videoplayback" in f.get("url")
+                and f.get("ext") == "mp4" and f.get("height") and f.get("height") <= target_height
+            ]
+            if matched:
+                best_match = matched[-1]
+                return best_match.get("url"), best_match.get("filesize") or best_match.get("filesize_approx"), "mp4"
+
+        # Look for combined progressive stream first (both video and audio)
+        prog = [
+            f for f in formats
+            if f.get("url") and "videoplayback" in f.get("url")
+            and f.get("vcodec") != "none" and f.get("acodec") != "none"
+        ]
+        if prog:
+            best_prog = prog[-1]
+            return best_prog.get("url"), best_prog.get("filesize") or best_prog.get("filesize_approx"), best_prog.get("ext", "mp4")
+
+        # Best available MP4 video stream
+        mp4_vids = [
+            f for f in formats
+            if f.get("url") and "videoplayback" in f.get("url")
+            and f.get("ext") == "mp4" and f.get("vcodec") != "none"
+        ]
+        if mp4_vids:
+            best_vid = mp4_vids[-1]
+            return best_vid.get("url"), best_vid.get("filesize") or best_vid.get("filesize_approx"), "mp4"
+
+        if info.get("url"):
+            return info.get("url"), info.get("filesize"), info.get("ext", "mp4")
+
+        return None, None, None

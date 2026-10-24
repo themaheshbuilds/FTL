@@ -109,13 +109,16 @@ def generate_endpoint():
         "download_url": f"/download/{job_id}"
     }
 
-    # Embed data_url for files <= 4MB for instant 0-latency serverless download
+    # Embed data_url or direct_url for instant 0-latency serverless download
     try:
         from services.job_service import JobService
         import base64
         import os
         job = JobService.get_job(job_id)
-        if job and job.output_file_path and os.path.isfile(job.output_file_path):
+        if job and getattr(job, "direct_url", None):
+            res_payload["direct_url"] = job.direct_url
+            res_payload["download_url"] = job.direct_url
+        elif job and job.output_file_path and os.path.isfile(job.output_file_path):
             actual_size = os.path.getsize(job.output_file_path)
             if actual_size <= int(3.2 * 1024 * 1024):
                 with open(job.output_file_path, "rb") as f:

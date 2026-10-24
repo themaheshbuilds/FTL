@@ -116,7 +116,15 @@ class JobService:
         return Config.GENERATED_STORAGE_DIR / job_id
 
     @classmethod
-    def update_job_success(cls, job_id: str, output_path: str, filename: str, mime_type: str, filesize: int) -> None:
+    def update_job_success(
+        cls,
+        job_id: str,
+        output_path: Optional[str],
+        filename: str,
+        mime_type: str,
+        filesize: Optional[int],
+        direct_url: Optional[str] = None
+    ) -> None:
         """Update job upon successful completion."""
         import json
 
@@ -127,6 +135,7 @@ class JobService:
             job.output_filename = filename
             job.mime_type = mime_type
             job.filesize = filesize
+            job.direct_url = direct_url
 
         # Persist metadata to disk for serverless worker persistence
         try:
@@ -134,10 +143,11 @@ class JobService:
             meta_file = gen_dir / "meta.json"
             meta_data = {
                 "job_id": job_id,
-                "output_file_path": str(output_path),
+                "output_file_path": str(output_path) if output_path else None,
                 "output_filename": filename,
                 "mime_type": mime_type,
                 "filesize": filesize,
+                "direct_url": direct_url,
                 "expires_at": job.expires_at if job else (time.time() + 1800),
                 "status": "completed"
             }

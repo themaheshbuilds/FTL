@@ -203,6 +203,22 @@ class MediaService:
                         pass
 
                 if not downloaded_file or not os.path.exists(downloaded_file):
+                    # Direct stream URL fallback for fast zero-timeout serverless delivery
+                    direct_url, d_size, d_ext = YtDlpService.get_direct_stream_url(url, quality)
+                    if direct_url:
+                        chosen_ext = d_ext or "mp4"
+                        final_name = f"{safe_base}.{chosen_ext}"
+                        mime = f"video/{chosen_ext}"
+                        JobService.update_job_success(
+                            job.job_id,
+                            output_path=None,
+                            filename=final_name,
+                            mime_type=mime,
+                            filesize=d_size,
+                            direct_url=direct_url
+                        )
+                        return True, job.job_id, final_name, mime, d_size, None
+
                     err_detail = getattr(YtDlpService, "last_download_error", "")
                     msg = f"Could not extract or download this media. {err_detail}".strip() if err_detail else "Could not extract or download this media. It may be restricted or unsupported."
                     return False, None, None, None, None, msg
