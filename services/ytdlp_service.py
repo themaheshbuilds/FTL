@@ -431,6 +431,8 @@ class YtDlpService:
             "outtmpl": output_path,
         }
 
+        is_serverless = Config.IS_SERVERLESS
+
         if format_filter == "audio":
             custom_opts["format"] = "bestaudio/best"
             if ffmpeg_bin:
@@ -439,6 +441,18 @@ class YtDlpService:
                     "preferredcodec": "mp3",
                     "preferredquality": "320",
                 }]
+        elif format_filter in ("highest", "max", "4k", "2160p", "1440p", "best"):
+            # Maximum available resolution (4K, 1440p, 1080p 60fps) merged with best audio stream
+            if ffmpeg_bin:
+                if is_serverless and format_filter == "best":
+                    custom_opts["format"] = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best[ext=mp4]/best"
+                else:
+                    custom_opts["format"] = "bestvideo+bestaudio/best"
+                custom_opts["merge_output_format"] = "mp4"
+                custom_opts["final_ext"] = "mp4"
+                custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+            else:
+                custom_opts["format"] = "bestvideo+bestaudio/best[ext=mp4]/best/18"
         elif format_filter == "1080p":
             if ffmpeg_bin:
                 custom_opts["format"] = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
@@ -464,14 +478,14 @@ class YtDlpService:
             else:
                 custom_opts["format"] = "best[height<=480][ext=mp4]/best[ext=mp4]/18/best"
         else:
-            # Default "best" = Fast 720p HD merged (avoids 4K/1080p 300MB multi-minute downloads)
+            # Custom format string
             if ffmpeg_bin:
-                custom_opts["format"] = "bestvideo[height<=720]+bestaudio/best[height<=720]/best[ext=mp4]/best"
+                custom_opts["format"] = format_filter
                 custom_opts["merge_output_format"] = "mp4"
                 custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
             else:
-                custom_opts["format"] = "best[height<=720][ext=mp4]/best[ext=mp4]/18/best"
+                custom_opts["format"] = format_filter
 
         opts = cls.get_default_opts(custom_opts)
 

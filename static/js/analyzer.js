@@ -241,10 +241,10 @@ const Analyzer = {
         formatActions.innerHTML = "";
 
         const formatConfig = {
-            "mp4": { label: "Standard Video", ext: ".mp4", icon: "🎬" },
-            "mkv": { label: "Matroska Video", ext: ".mkv", icon: "🎞️" },
+            "mp4": { label: "MP4 Video (Highest Quality)", ext: ".mp4", icon: "🎬" },
+            "mkv": { label: "MKV Video (Lossless)", ext: ".mkv", icon: "🎞️" },
             "webm": { label: "WebM Video", ext: ".webm", icon: "🌐" },
-            "video": { label: "Video", ext: ".mp4", icon: "🎬" },
+            "video": { label: "MP4 Video (Highest Quality)", ext: ".mp4", icon: "🎬" },
             "audio": { label: "Audio Track", ext: ".mp3", icon: "🎵" },
             "mp3": { label: "MP3 Audio", ext: ".mp3", icon: "🎵" },
             "m4a": { label: "AAC Audio", ext: ".m4a", icon: "🎧" },
@@ -311,7 +311,7 @@ const Analyzer = {
 
     async handleFormatSelection(formatKey) {
         const qualitySelect = document.getElementById("quality-select");
-        const quality = qualitySelect ? qualitySelect.value : "best";
+        const quality = qualitySelect ? qualitySelect.value : "highest";
 
         const filenameInput = document.getElementById("custom-filename-input");
         const customFilename = filenameInput ? filenameInput.value.trim() : "";

@@ -260,4 +260,46 @@ def test_process_and_package_multi_item_original_defaults_to_zip(tmp_path):
             assert mime == "application/zip"
 
 
+def test_ytdlp_quality_formats(tmp_path):
+    """Test that YtDlpService selects proper highest-quality stream options based on format_filter."""
+    from unittest.mock import patch
+    from services.ytdlp_service import YtDlpService
+
+    captured_opts = []
+
+    def mock_ydl_init(opts):
+        captured_opts.append(opts)
+        class DummyYDL:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def extract_info(self, url, download=True):
+                # Write a dummy output file
+                dummy_file = tmp_path / "test.mp4"
+                dummy_file.write_bytes(b"\x00\x00\x00\x1cftypisom")
+                return {"id": "123", "title": "test"}
+        return DummyYDL()
+
+    with patch("yt_dlp.YoutubeDL", side_effect=mock_ydl_init):
+        # 1. Highest quality
+        captured_opts.clear()
+        YtDlpService.download_media("https://youtu.be/123", str(tmp_path), format_filter="highest")
+        assert len(captured_opts) > 0
+        assert "bestvideo+bestaudio" in captured_opts[0]["format"]
+
+        # 2. 1080p quality
+        captured_opts.clear()
+        YtDlpService.download_media("https://youtu.be/123", str(tmp_path), format_filter="1080p")
+        assert len(captured_opts) > 0
+        assert "1080" in captured_opts[0]["format"]
+
+        # 3. 720p quality
+        captured_opts.clear()
+        YtDlpService.download_media("https://youtu.be/123", str(tmp_path), format_filter="720p")
+        assert len(captured_opts) > 0
+        assert "720" in captured_opts[0]["format"]
+
+
+
 

@@ -430,7 +430,7 @@ const DownloaderApp = {
                             <div class="video-item-title">${vid.title || `Video #${i + 1}`}</div>
                             <div class="video-actions-row">
                                 <button type="button" class="btn-video-action btn-mp4" data-index="${vid.origIndex}">
-                                    &#x2193; Download MP4 Video
+                                    &#x2193; Download MP4 (Highest Quality)
                                 </button>
                                 <button type="button" class="btn-video-action btn-mkv" data-index="${vid.origIndex}">
                                     &#x2193; Download MKV (Lossless)
@@ -444,8 +444,10 @@ const DownloaderApp = {
 
                     if (mp4Btn) {
                         mp4Btn.addEventListener("click", () => {
+                            const chosenQuality = document.getElementById("quality-select")?.value || "highest";
                             this.startDownload({
                                 format: "mp4",
+                                quality: chosenQuality,
                                 selected_indices: [vid.origIndex],
                                 custom_filename: `video_${i + 1}`
                             });
@@ -454,8 +456,10 @@ const DownloaderApp = {
 
                     if (mkvBtn) {
                         mkvBtn.addEventListener("click", () => {
+                            const chosenQuality = document.getElementById("quality-select")?.value || "highest";
                             this.startDownload({
                                 format: "mkv",
+                                quality: chosenQuality,
                                 selected_indices: [vid.origIndex],
                                 custom_filename: `video_${i + 1}`
                             });
@@ -613,9 +617,9 @@ const DownloaderApp = {
                 images_pdf: { format: "pdf", label: "PDF Document", badge: "PDF", desc: "Combine extracted images into a single PDF" },
                 docx: { format: "docx", label: "Word Document", badge: "DOCX", desc: "Editable Microsoft Word document with images" },
                 doc: { format: "docx", label: "Word Document", badge: "DOCX", desc: "Editable Microsoft Word document" },
-                mp4: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Universal video compatible with all devices" },
-                video: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Direct video stream packaged in MP4 container" },
-                mkv: { format: "mkv", label: "MKV Video", badge: "MKV", desc: "Lossless Matroska container" },
+                mp4: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Highest quality video merged with audio (4K / 1080p)" },
+                video: { format: "mp4", label: "MP4 Video", badge: "MP4", desc: "Original video stream packaged in MP4 container" },
+                mkv: { format: "mkv", label: "MKV Video", badge: "MKV", desc: "Lossless Matroska container in maximum resolution" },
                 webm: { format: "webm", label: "WebM Video", badge: "WEBM", desc: "Web-optimized lightweight video" },
                 audio: { format: "audio", label: "MP3 Audio", badge: "MP3", desc: "High-bitrate audio track (192 kbps)" },
                 mp3: { format: "audio", label: "MP3 Audio", badge: "MP3", desc: "Standard high-fidelity MP3 stream" },
@@ -675,6 +679,31 @@ const DownloaderApp = {
 
             const btn = document.getElementById("btn-start-download");
             if (btn) btn.innerHTML = `&#x2193; Download as ${formatItems[0].label}`;
+        }
+
+        // Video Quality & Caption Setting Groups
+        const qualityGroup = document.getElementById("quality-setting-group");
+        const qualitySelect = document.getElementById("quality-select");
+        const hasVideos = videos.length > 0 || (data.content_type && data.content_type.includes("video"));
+
+        if (qualityGroup && qualitySelect) {
+            if (hasVideos) {
+                qualityGroup.style.display = "flex";
+                qualitySelect.innerHTML = `
+                    <option value="highest" selected>⚡ Highest Quality Available (Original / 4K / 1080p)</option>
+                    <option value="1080p">1080p Full HD</option>
+                    <option value="720p">720p HD (Faster download)</option>
+                    <option value="480p">480p SD</option>
+                `;
+            } else {
+                qualityGroup.style.display = "none";
+                qualitySelect.innerHTML = "";
+            }
+        }
+
+        const captionGroup = document.getElementById("caption-setting-group");
+        if (captionGroup) {
+            captionGroup.style.display = data.description ? "flex" : "none";
         }
 
         // Custom Filename Input
@@ -744,7 +773,7 @@ const DownloaderApp = {
         const format = options.format || this.selectedFormat || "zip";
         const selectedIndices = options.selected_indices !== undefined ? options.selected_indices : this.getSelectedImageIndices();
         const customFilename = (options.custom_filename || document.getElementById("custom-filename-input")?.value || "").trim();
-        const quality = document.getElementById("quality-select")?.value || "best";
+        const quality = options.quality || document.getElementById("quality-select")?.value || "highest";
         const captionCheckbox = document.getElementById("include-caption-checkbox");
         const includeCaption = captionCheckbox ? captionCheckbox.checked : false;
 

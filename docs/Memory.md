@@ -469,3 +469,15 @@ pytest -v
      - In `routes/converter.py` and `routes/api.py`, `data_url` payload threshold is set to `3.2MB` raw bytes (~4.26MB base64) to strictly prevent exceeding Vercel's 4.5MB serverless response limit.
   5. **Executable Permissions for FFmpeg on Linux:**
      - In `utils/ffmpeg_helper.py`, added runtime `os.chmod(exe, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)` for Linux/serverless instances.
+
+### 8. Highest Quality (4K / 1440p / 1080p 60fps) Video Download Engine
+- **The Problem:**
+  - `YtDlpService` previously defaulted all downloads to a 720p cap (`bestvideo[height<=720]+bestaudio`) to reduce download durations on weak networks, which prevented users from getting 4K, 1440p, or uncompressed 1080p.
+  - The UI quality dropdown `#quality-setting-group` had `style="display:none"` hardcoded and was never shown during video link analysis.
+- **The Solution:**
+  1. **Maximum Quality Resolution in `YtDlpService`:**
+     - For `format_filter` in `("highest", "max", "4k", "2160p", "1440p", "best")`, `YtDlpService.download_media` uses `bestvideo+bestaudio/best` merged to `.mp4` via ffmpeg (or `bestvideo[height<=1080]+bestaudio` fallback on serverless if unconstrained to avoid timeouts).
+     - Dedicated quality options: `1080p`, `720p`, and `480p` with seamless remuxing via `FFmpegVideoRemuxer`.
+  2. **Exposed Frontend Quality Dropdown:**
+     - In `static/js/downloader.js` (and mirrored in `public/static/js/downloader.js`), `renderOptions` dynamically unhides `#quality-setting-group` whenever video items or content type are present, pre-selecting `⚡ Highest Quality Available (Original / 4K / 1080p)`.
+     - Individual video cards feature `Download MP4 (Highest Quality)` buttons passing the user's selected resolution directly to `/api/generate`.
