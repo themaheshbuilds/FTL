@@ -203,7 +203,9 @@ class MediaService:
                         pass
 
                 if not downloaded_file or not os.path.exists(downloaded_file):
-                    return False, None, None, None, None, "Could not extract or download this media. It may be restricted or unsupported."
+                    err_detail = getattr(YtDlpService, "last_download_error", "")
+                    msg = f"Could not extract or download this media. {err_detail}".strip() if err_detail else "Could not extract or download this media. It may be restricted or unsupported."
+                    return False, None, None, None, None, msg
 
                 # If Audio was requested:
                 if is_audio:

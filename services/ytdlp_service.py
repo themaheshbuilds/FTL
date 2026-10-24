@@ -499,20 +499,24 @@ class YtDlpService:
 
         opts = cls.get_default_opts(custom_opts)
 
-        download_success = False
+        cls.last_download_error = ""
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 if info:
                     download_success = True
         except Exception as e:
+            cls.last_download_error = f"Primary failed: {e}"
             logger.warning(f"Primary download trial failed for {url}: {e}. Attempting visionos mobile fallback...")
             fallback_opts = dict(opts)
             fallback_opts.pop("cookiefile", None)
-            fallback_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best/18"
+            if format_filter in ("audio", "m4a", "mp3"):
+                fallback_opts["format"] = "bestaudio/best"
+            else:
+                fallback_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
             fallback_opts["extractor_args"] = {
                 "youtube": {
-                    "player_client": ["visionos"],
+                    "player_client": ["visionos", "web"],
                     "player_skip": ["configs"]
                 }
             }
@@ -522,6 +526,7 @@ class YtDlpService:
                     if info:
                         download_success = True
             except Exception as e2:
+                cls.last_download_error = f"Fallback failed: {e2} (Primary: {e})"
                 logger.error(f"VisionOS fallback download also failed for {url}: {e2}")
 
         if not download_success:
