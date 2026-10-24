@@ -44,6 +44,8 @@ def debug_yt():
     opts = YtDlpService.get_default_opts(extra)
     if not use_cookies:
         opts.pop("cookiefile", None)
+    if request.args.get("noproxy"):
+        opts.pop("proxy", None)
         
     cookie_file = YtDlpService.get_cookie_file()
     cookies_count = 0
