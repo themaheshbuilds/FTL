@@ -267,17 +267,19 @@ pytest -v
 ```
 **Current Verified Result:**
 ```text
-============================= 46 passed in 7.12s =============================
+============================= 86 passed in 15.60s =============================
 - tests/test_analyzer.py (4/4) [Includes cookie normalization & SSRF tests]
 - tests/test_api.py (6/6)
 - tests/test_converter.py (7/7)
+- tests/test_email.py (6/6)
 - tests/test_filenames.py (4/4)
-- tests/test_frontend.py (3/3)
-- tests/test_health.py (2/2)
-- tests/test_instagram_extractor.py (4/4)
+- tests/test_frontend.py (17/17)
+- tests/test_health.py (3/3)
+- tests/test_instagram_extractor.py (8/8)
 - tests/test_linkedin_extractor.py (7/7)
-- tests/test_packaging.py (5/5)
+- tests/test_packaging.py (8/8)
 - tests/test_security.py (4/4)
+- tests/test_vercel_middleware.py (12/12)
 ```
 
 ---
@@ -445,3 +447,25 @@ pytest -v
      - In `services/ytdlp_service.py`, `noplaylist` is strictly forced to `True` (preventing extraction of entire channel feeds or related playlists).
      - Prioritizes the `android` mobile client (`player_client: ["android"]`), reducing yt-dlp fallback execution time to ~1.5 seconds.
      - Tightened `socket_timeout` to 6s on serverless and capped `retries` to 2.
+
+### 7. Browser Top-Frame Data URL Blocking Resolution & Blob Object URLs
+- **The Problem:**
+  - Modern Chromium browsers (Chrome, Edge, Brave, Safari) block top-frame navigation to `data:` URIs (`Not allowed to navigate top frame to data URL`).
+  - When the frontend received base64 `data_url` in `/api/convert` or `/api/generate`, setting `autoLink.href = data.data_url` and calling `.click()` was blocked by the browser to prevent drive-by download attacks.
+  - Manual clicks on `<a href="data:...">` opened `about:blank#blocked`.
+  - Immediate `document.body.removeChild(autoLink)` in the same synchronous task also aborted pending downloads in some browsers.
+  - On Linux/Vercel serverless environments, static `imageio-ffmpeg` binary permissions lacked `+x`, causing media conversions to throw 422.
+- **The Solution:**
+  1. **Blob Object URL Converter (`dataUrlToBlobUrl`):**
+     - In `static/js/converter.js`, `static/js/tool_converter.js`, and `static/js/downloader.js` (and mirrored in `public/static/js/`), `dataUrlToBlobUrl(dataUrl)` decodes the base64 string to a `Uint8Array`, creates a `new Blob([bytes], { type: mimeType })`, and generates a local `blob:` URL via `URL.createObjectURL(blob)`.
+     - Browsers treat `blob:https://...` as a safe local file object with zero navigation restrictions.
+  2. **Direct Memory Button & Auto-Download:**
+     - `dlBtn.href = blobUrl; dlBtn.setAttribute("download", filename);`
+     - Auto-download creates `<a href="blobUrl" download="filename">`, clicks it, and schedules cleanup via `setTimeout(..., 600)`.
+     - Manual button clicks download directly from browser memory without any network request or serverless 404 risk.
+  3. **Direct Binary Streaming Mode (`?stream=1`):**
+     - `/api/convert?stream=1` supports streaming the converted file directly back as binary attachment with `X-Filename` and `X-Filesize` headers, avoiding base64 encoding overhead.
+  4. **Strict Vercel Payload Protection:**
+     - In `routes/converter.py` and `routes/api.py`, `data_url` payload threshold is set to `3.2MB` raw bytes (~4.26MB base64) to strictly prevent exceeding Vercel's 4.5MB serverless response limit.
+  5. **Executable Permissions for FFmpeg on Linux:**
+     - In `utils/ffmpeg_helper.py`, added runtime `os.chmod(exe, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)` for Linux/serverless instances.

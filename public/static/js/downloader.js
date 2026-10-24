@@ -779,30 +779,54 @@ const DownloaderApp = {
         }
     },
 
+    dataUrlToBlobUrl(dataUrl) {
+        if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) return dataUrl;
+        try {
+            const parts = dataUrl.split(";base64,");
+            if (parts.length === 2) {
+                const mimeType = parts[0].replace(/^data:/, "") || "application/octet-stream";
+                const byteCharacters = atob(parts[1]);
+                const byteNumbers = new Uint8Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const blob = new Blob([byteNumbers], { type: mimeType });
+                return URL.createObjectURL(blob);
+            }
+        } catch (e) {
+            console.warn("Could not convert data_url to Blob URL:", e);
+        }
+        return dataUrl;
+    },
+
     showSuccess(data, format) {
         const fnEl = document.getElementById("success-filename");
         const szEl = document.getElementById("success-filesize");
         const fmtEl = document.getElementById("success-format");
         const dlBtn = document.getElementById("direct-download-btn");
 
-        if (fnEl) fnEl.textContent = data.filename || "download_file";
+        const filename = data.filename || "download_file";
+        if (fnEl) fnEl.textContent = filename;
         if (szEl) szEl.textContent = data.size_formatted || (data.filesize ? `${(data.filesize / (1024 * 1024)).toFixed(2)} MB` : "Ready");
         if (fmtEl) fmtEl.textContent = (format || this.selectedFormat || "FILE").toUpperCase();
 
-        const downloadUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
+        const rawUrl = data.data_url || `/download/${encodeURIComponent(data.file_id)}`;
+        const downloadUrl = data.data_url ? this.dataUrlToBlobUrl(data.data_url) : rawUrl;
         if (dlBtn) {
             dlBtn.href = downloadUrl;
-            dlBtn.setAttribute("download", data.filename || "download_file");
+            dlBtn.setAttribute("download", filename);
         }
 
-        // Trigger automatic browser download immediately
+        // Trigger automatic browser download immediately via Blob Object URL
         if (downloadUrl) {
             const autoLink = document.createElement("a");
             autoLink.href = downloadUrl;
-            autoLink.setAttribute("download", data.filename || "download_file");
+            autoLink.setAttribute("download", filename);
             document.body.appendChild(autoLink);
             autoLink.click();
-            document.body.removeChild(autoLink);
+            setTimeout(() => {
+                try { document.body.removeChild(autoLink); } catch (e) {}
+            }, 600);
         }
 
         // Reset email widget

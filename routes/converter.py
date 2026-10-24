@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from config import Config
 from services.converter_service import ConverterService
 from utils.filenames import sanitize_filename
@@ -109,14 +109,28 @@ def convert_endpoint():
             "download_url": f"/download/{job_id}"
         }
 
-        # Embed data_url for files <= 4MB for instant 0-latency serverless download
+        from services.job_service import JobService
+        job = JobService.get_job(job_id)
+
+        # Support direct binary streaming when stream=1 requested
+        if request.args.get("stream") == "1":
+            if job and job.output_file_path and os.path.isfile(job.output_file_path):
+                response = send_file(
+                    job.output_file_path,
+                    as_attachment=True,
+                    download_name=filename,
+                    mimetype=mime_type or "application/octet-stream"
+                )
+                response.headers["X-Filename"] = filename
+                response.headers["X-Filesize"] = str(filesize or os.path.getsize(job.output_file_path))
+                return response
+
+        # Embed data_url for files <= 3.2MB to strictly stay within Vercel's 4.5MB payload limit
         try:
-            from services.job_service import JobService
             import base64
-            job = JobService.get_job(job_id)
             if job and job.output_file_path and os.path.isfile(job.output_file_path):
                 actual_size = os.path.getsize(job.output_file_path)
-                if actual_size <= 4 * 1024 * 1024:
+                if actual_size <= int(3.2 * 1024 * 1024):
                     with open(job.output_file_path, "rb") as f:
                         b64 = base64.b64encode(f.read()).decode("ascii")
                     res_payload["data_url"] = f"data:{mime_type or 'application/octet-stream'};base64,{b64}"

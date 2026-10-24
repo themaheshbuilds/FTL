@@ -117,7 +117,7 @@ def generate_endpoint():
         job = JobService.get_job(job_id)
         if job and job.output_file_path and os.path.isfile(job.output_file_path):
             actual_size = os.path.getsize(job.output_file_path)
-            if actual_size <= 4 * 1024 * 1024:
+            if actual_size <= int(3.2 * 1024 * 1024):
                 with open(job.output_file_path, "rb") as f:
                     b64 = base64.b64encode(f.read()).decode("ascii")
                 res_payload["data_url"] = f"data:{mime_type or 'application/octet-stream'};base64,{b64}"

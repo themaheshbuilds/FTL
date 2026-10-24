@@ -14,7 +14,16 @@ def get_ffmpeg_executable() -> Optional[str]:
     # 2. imageio-ffmpeg static binary
     try:
         import imageio_ffmpeg
-        return imageio_ffmpeg.get_ffmpeg_exe()
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if exe and os.path.exists(exe):
+            if os.name != "nt":
+                import stat
+                try:
+                    st = os.stat(exe)
+                    os.chmod(exe, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                except Exception:
+                    pass
+            return exe
     except Exception:
         return None
 
