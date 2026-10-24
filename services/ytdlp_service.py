@@ -558,7 +558,9 @@ class YtDlpService:
                 candidates.append((fpath, os.path.getsize(fpath), os.path.getmtime(fpath)))
 
         if not candidates:
-            logger.warning(f"No completed file found in {target_dir} after yt-dlp download.")
+            all_files = os.listdir(target_dir) if os.path.exists(target_dir) else []
+            cls.last_download_error = f"No completed file in target_dir. Files present: {all_files}"
+            logger.warning(f"No completed file found in {target_dir} after yt-dlp download. Files present: {all_files}")
             return None
 
         # Pick largest/newest completed candidate file
