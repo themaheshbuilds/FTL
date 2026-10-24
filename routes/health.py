@@ -16,7 +16,11 @@ def health_check():
     Returns:
         JSON response with system status.
     """
-    return jsonify({"status": "ok"}), 200
+    from utils.ffmpeg_helper import get_ffmpeg_executable
+    return jsonify({
+        "status": "ok",
+        "ffmpeg": get_ffmpeg_executable()
+    }), 200
 
 
 @health_bp.route("/api/debug_yt", methods=["GET"], strict_slashes=False)
