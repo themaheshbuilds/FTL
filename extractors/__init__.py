@@ -6,6 +6,7 @@ from extractors.twitter import TwitterExtractor
 from extractors.reddit import RedditExtractor
 from extractors.facebook import FacebookExtractor
 from extractors.linkedin import LinkedInExtractor
+from extractors.torrent import TorrentExtractor
 
 __all__ = [
     "BaseExtractor",
@@ -16,4 +17,5 @@ __all__ = [
     "RedditExtractor",
     "FacebookExtractor",
     "LinkedInExtractor",
+    "TorrentExtractor",
 ]

@@ -118,6 +118,35 @@ const DownloaderApp = {
             });
         }
 
+        // Torrent / Magnet listeners
+        const torrentUploadBtn = document.getElementById("torrent-upload-btn");
+        const torrentFileInput = document.getElementById("torrent-file-input");
+        const btnCancelTorrent = document.getElementById("btn-cancel-torrent");
+        const btnTorrentSaveAll = document.getElementById("btn-torrent-save-all");
+
+        if (torrentUploadBtn && torrentFileInput) {
+            torrentUploadBtn.addEventListener("click", () => torrentFileInput.click());
+            torrentFileInput.addEventListener("change", (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    this.startTorrent(file);
+                }
+            });
+        }
+
+        if (btnCancelTorrent) {
+            btnCancelTorrent.addEventListener("click", () => {
+                this.stopTorrent();
+                this.showView("input-view");
+            });
+        }
+
+        if (btnTorrentSaveAll) {
+            btnTorrentSaveAll.addEventListener("click", () => {
+                this.saveAllTorrentFiles();
+            });
+        }
+
         this.initModals();
     },
 
@@ -136,7 +165,7 @@ const DownloaderApp = {
     },
 
     showView(viewName) {
-        const views = ["input-view", "loading-view", "options-view", "downloading-view", "success-view", "error-view"];
+        const views = ["input-view", "loading-view", "options-view", "downloading-view", "success-view", "torrent-view", "error-view"];
         views.forEach(v => {
             const el = document.getElementById(v);
             if (el) {
@@ -150,6 +179,7 @@ const DownloaderApp = {
     },
 
     resetToHome() {
+        this.stopTorrent();
         const urlInput = document.getElementById("url-input");
         const clearBtn = document.getElementById("clear-btn");
         if (urlInput) urlInput.value = "";
@@ -163,6 +193,15 @@ const DownloaderApp = {
     },
 
     async analyzeUrl(url) {
+        if (!url) return;
+        const low = url.trim().toLowerCase();
+
+        // 1. BitTorrent Magnet Link or .torrent URL: Direct Client-Side P2P Engine ($0 Serverless Cost)
+        if (low.startsWith("magnet:") || low.endsWith(".torrent")) {
+            this.startTorrent(url.trim());
+            return;
+        }
+
         this.currentUrl = url;
         this.showView("loading-view");
 
@@ -971,6 +1010,282 @@ const DownloaderApp = {
 
         setupModal("open-about-modal", "about-modal", "close-about-modal");
         setupModal("open-platforms-modal", "platforms-modal", "close-platforms-modal");
+    },
+
+    // ============================================================
+    // WEBTORRENT LIVE P2P ENGINE (100% Free / $0 Vercel Bandwidth)
+    // ============================================================
+    torrentClient: null,
+    activeTorrent: null,
+    DEFAULT_TRACKERS: [
+        "wss://tracker.openwebtorrent.com",
+        "wss://tracker.webtorrent.dev",
+        "wss://tracker.files.fm:7073/announce",
+        "wss://tracker.btorrent.xyz"
+    ],
+
+    stopTorrent() {
+        if (this.activeTorrent) {
+            try {
+                this.activeTorrent.destroy();
+            } catch (e) {
+                console.warn("Torrent destroy warning:", e);
+            }
+            this.activeTorrent = null;
+        }
+    },
+
+    formatBytes(bytes) {
+        if (!bytes || bytes <= 0 || isNaN(bytes)) return "0 B";
+        const k = 1024;
+        const dm = 2;
+        const sizes = ["B", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+    },
+
+    formatETA(ms) {
+        if (!ms || ms === Infinity || isNaN(ms)) return "Connecting...";
+        const seconds = Math.floor(ms / 1000);
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        const remSecs = seconds % 60;
+        if (minutes < 60) return `${minutes}m ${remSecs}s`;
+        const hours = Math.floor(minutes / 60);
+        return `${hours}h ${minutes % 60}m`;
+    },
+
+    startTorrent(torrentIdOrFile) {
+        if (typeof WebTorrent === "undefined") {
+            this.showError("WebTorrent engine could not be loaded in your browser. Please check your network connection.");
+            return;
+        }
+
+        this.stopTorrent();
+        this.showView("torrent-view");
+
+        // Reset UI metrics
+        const titleEl = document.getElementById("torrent-title");
+        const statusEl = document.getElementById("torrent-status-summary");
+        const dlEl = document.getElementById("torrent-dl-speed");
+        const ulEl = document.getElementById("torrent-ul-speed");
+        const peersEl = document.getElementById("torrent-peers");
+        const etaEl = document.getElementById("torrent-eta");
+        const progBar = document.getElementById("torrent-progress-bar");
+        const bytesInfo = document.getElementById("torrent-bytes-info");
+        const fileList = document.getElementById("torrent-files-list");
+        const playerCont = document.getElementById("torrent-player-container");
+        const playerWrapper = document.getElementById("torrent-video-wrapper");
+
+        if (titleEl) titleEl.textContent = "Connecting to Torrent Swarm...";
+        if (statusEl) statusEl.textContent = "Discovering WebRTC peers and trackers...";
+        if (dlEl) dlEl.textContent = "0 KB/s";
+        if (ulEl) ulEl.textContent = "0 KB/s";
+        if (peersEl) peersEl.textContent = "0 peers";
+        if (etaEl) etaEl.textContent = "Connecting...";
+        if (progBar) progBar.style.width = "0%";
+        if (bytesInfo) bytesInfo.textContent = "0 MB / 0 MB (0%)";
+        if (fileList) fileList.innerHTML = "<div style='color:var(--text-muted);font-size:13px;padding:8px 0'>Fetching torrent metadata from swarm...</div>";
+        if (playerCont) playerCont.style.display = "none";
+        if (playerWrapper) playerWrapper.innerHTML = "";
+
+        if (!this.torrentClient) {
+            try {
+                this.torrentClient = new WebTorrent({
+                    tracker: {
+                        rtcConfig: {
+                            iceServers: [
+                                { urls: "stun:stun.l.google.com:19302" },
+                                { urls: "stun:global.stun.twilio.com:3478" }
+                            ]
+                        }
+                    }
+                });
+            } catch (ce) {
+                console.error("WebTorrent init error:", ce);
+                this.showError("Could not initialize WebTorrent client: " + ce.message);
+                return;
+            }
+        }
+
+        try {
+            this.torrentClient.add(torrentIdOrFile, { announce: this.DEFAULT_TRACKERS }, (torrent) => {
+                this.activeTorrent = torrent;
+                this.renderTorrent(torrent);
+            });
+        } catch (err) {
+            console.error("Failed to add torrent:", err);
+            this.showError("Invalid torrent or magnet link. " + (err.message || ""));
+        }
+    },
+
+    renderTorrent(torrent) {
+        const titleEl = document.getElementById("torrent-title");
+        const hashBadge = document.getElementById("torrent-hash-badge");
+        const fileCountEl = document.getElementById("torrent-file-count");
+        const statusEl = document.getElementById("torrent-status-summary");
+
+        if (titleEl) titleEl.textContent = torrent.name || "BitTorrent Download";
+        if (hashBadge) hashBadge.textContent = (torrent.infoHash || "Swarm").substring(0, 10).toUpperCase();
+        if (fileCountEl) fileCountEl.textContent = torrent.files.length;
+        if (statusEl) statusEl.textContent = `${torrent.files.length} file${torrent.files.length > 1 ? 's' : ''} • Total: ${this.formatBytes(torrent.length)}`;
+
+        const filesList = document.getElementById("torrent-files-list");
+        if (filesList) filesList.innerHTML = "";
+
+        const btnSaveAll = document.getElementById("btn-torrent-save-all");
+        if (btnSaveAll) {
+            btnSaveAll.style.display = torrent.files.length > 1 ? "inline-flex" : "none";
+        }
+
+        // Check if there is a playable video file
+        const videoFile = torrent.files.find(f => {
+            const ext = f.name.split('.').pop().toLowerCase();
+            return ["mp4", "webm", "mkv", "mov"].includes(ext);
+        });
+
+        if (videoFile) {
+            const playerCont = document.getElementById("torrent-player-container");
+            const playerWrapper = document.getElementById("torrent-video-wrapper");
+            if (playerCont && playerWrapper) {
+                playerCont.style.display = "block";
+                playerWrapper.innerHTML = "";
+
+                const vidEl = document.createElement("video");
+                vidEl.controls = true;
+                vidEl.autoplay = false;
+                vidEl.playsInline = true;
+                playerWrapper.appendChild(vidEl);
+
+                try {
+                    videoFile.renderTo(vidEl, (err) => {
+                        if (err) console.warn("Video stream render warning:", err);
+                    });
+                } catch (ve) {
+                    console.warn("renderTo error:", ve);
+                }
+            }
+        }
+
+        // Render each file in the torrent
+        if (filesList) {
+            torrent.files.forEach((file, idx) => {
+                const row = document.createElement("div");
+                row.className = "torrent-file-row";
+                const ext = file.name.split('.').pop().toLowerCase();
+                let icon = "📄";
+                if (["mp4", "mkv", "webm", "mov", "avi"].includes(ext)) icon = "🎬";
+                else if (["mp3", "m4a", "flac", "wav", "ogg"].includes(ext)) icon = "🎵";
+                else if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) icon = "🖼️";
+                else if (["zip", "rar", "7z", "tar", "gz", "iso"].includes(ext)) icon = "📦";
+                else if (["pdf", "docx", "txt", "epub"].includes(ext)) icon = "📑";
+
+                row.innerHTML = `
+                    <div class="torrent-file-info">
+                        <span class="torrent-file-icon">${icon}</span>
+                        <div style="min-width:0">
+                            <div class="torrent-file-title" title="${file.name}">${file.name}</div>
+                            <div class="torrent-file-sub" id="file-prog-${idx}">${this.formatBytes(file.length)} • 0% ready</div>
+                        </div>
+                    </div>
+                    <div class="torrent-file-actions">
+                        <button type="button" class="btn-file-save" id="btn-save-file-${idx}">
+                            ⬇️ Save File
+                        </button>
+                    </div>
+                `;
+
+                const saveBtn = row.querySelector(`#btn-save-file-${idx}`);
+                if (saveBtn) {
+                    saveBtn.addEventListener("click", () => {
+                        saveBtn.textContent = "⏳ Preparing...";
+                        file.getBlobURL((err, url) => {
+                            if (err) {
+                                alert("Could not generate file: " + err.message);
+                                saveBtn.textContent = "⬇️ Save File";
+                                return;
+                            }
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = file.name;
+                            document.body.appendChild(a);
+                            a.click();
+                            setTimeout(() => {
+                                if (document.body.contains(a)) document.body.removeChild(a);
+                                saveBtn.textContent = "✓ Saved";
+                            }, 500);
+                        });
+                    });
+                }
+
+                filesList.appendChild(row);
+            });
+        }
+
+        // Throttle progress updates to 200ms
+        let lastUpdate = 0;
+        const onProgressUpdate = () => {
+            const now = Date.now();
+            if (now - lastUpdate < 150) return;
+            lastUpdate = now;
+
+            const percent = (torrent.progress * 100).toFixed(1);
+            const dlEl = document.getElementById("torrent-dl-speed");
+            const ulEl = document.getElementById("torrent-ul-speed");
+            const peersEl = document.getElementById("torrent-peers");
+            const etaEl = document.getElementById("torrent-eta");
+            const progBar = document.getElementById("torrent-progress-bar");
+            const bytesInfo = document.getElementById("torrent-bytes-info");
+
+            if (dlEl) dlEl.textContent = this.formatBytes(torrent.downloadSpeed) + "/s";
+            if (ulEl) ulEl.textContent = this.formatBytes(torrent.uploadSpeed) + "/s";
+            if (peersEl) peersEl.textContent = `${torrent.numPeers} peer${torrent.numPeers !== 1 ? 's' : ''}`;
+            if (etaEl) etaEl.textContent = this.formatETA(torrent.timeRemaining);
+            if (progBar) progBar.style.width = `${percent}%`;
+            if (bytesInfo) bytesInfo.textContent = `${this.formatBytes(torrent.downloaded)} / ${this.formatBytes(torrent.length)} (${percent}%)`;
+
+            // Update individual file progress indicators
+            torrent.files.forEach((file, idx) => {
+                const sub = document.getElementById(`file-prog-${idx}`);
+                if (sub) {
+                    const fprog = (file.progress * 100).toFixed(0);
+                    sub.textContent = `${this.formatBytes(file.length)} • ${fprog}% ready`;
+                }
+            });
+        };
+
+        torrent.on("download", onProgressUpdate);
+        torrent.on("upload", onProgressUpdate);
+
+        torrent.on("done", () => {
+            const progBar = document.getElementById("torrent-progress-bar");
+            const bytesInfo = document.getElementById("torrent-bytes-info");
+            const statusEl = document.getElementById("torrent-status-summary");
+            const etaEl = document.getElementById("torrent-eta");
+
+            if (progBar) progBar.style.width = "100%";
+            if (bytesInfo) bytesInfo.textContent = `${this.formatBytes(torrent.length)} / ${this.formatBytes(torrent.length)} (100% Complete!)`;
+            if (statusEl) statusEl.textContent = "Download complete! All files ready to save.";
+            if (etaEl) etaEl.textContent = "Finished!";
+        });
+    },
+
+    saveAllTorrentFiles() {
+        if (!this.activeTorrent) return;
+        this.activeTorrent.files.forEach(file => {
+            file.getBlobURL((err, url) => {
+                if (!err && url) {
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = file.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        if (document.body.contains(a)) document.body.removeChild(a);
+                    }, 500);
+                }
+            });
+        });
     }
 };
 

@@ -10,6 +10,9 @@ def normalize_url(url: str) -> str:
     if not cleaned:
         return ""
 
+    if cleaned.lower().startswith("magnet:"):
+        return cleaned
+
     # Prepend https:// if protocol is missing
     if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", cleaned):
         cleaned = "https://" + cleaned

@@ -6,6 +6,7 @@ from extractors.twitter import TwitterExtractor
 from extractors.reddit import RedditExtractor
 from extractors.facebook import FacebookExtractor
 from extractors.linkedin import LinkedInExtractor
+from extractors.torrent import TorrentExtractor
 from extractors.generic import GenericExtractor
 from models.result import AnalysisResult
 from models.media import MediaItem
@@ -20,6 +21,7 @@ class ExtractionService:
     def __init__(self):
         # Specific extractors in priority order, with GenericExtractor as final fallback
         self.extractors: List[BaseExtractor] = [
+            TorrentExtractor(),
             YouTubeExtractor(),
             InstagramExtractor(),
             TwitterExtractor(),

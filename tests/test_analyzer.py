@@ -18,6 +18,8 @@ def test_platform_detection():
         ("https://www.linkedin.com/posts/activity-123", "LinkedIn"),
         ("https://example.com/assets/banner.png", "Direct File"),
         ("https://example.com/article", "Generic Web"),
+        ("magnet:?xt=urn:btih:08ada5a7a6183aae1e09be831df674f7e60f135e&dn=Sintel", "BitTorrent"),
+        ("https://example.com/ubuntu-22.04.torrent", "BitTorrent"),
     ]
     for url, expected_platform in test_cases:
         assert PlatformDetector.detect_platform(url) == expected_platform
@@ -62,3 +64,21 @@ def test_cookie_formatting():
     formatted_json = format_cookies_to_netscape(json_input)
     assert "# Netscape HTTP Cookie File" in formatted_json
     assert "SID\t123" in formatted_json
+
+
+def test_torrent_extractor():
+    """Verify TorrentExtractor correctly parses magnet links and files."""
+    from extractors.torrent import TorrentExtractor
+    extractor = TorrentExtractor()
+
+    magnet_url = "magnet:?xt=urn:btih:08ada5a7a6183aae1e09be831df674f7e60f135e&dn=Sintel%20Movie"
+    assert extractor.can_handle(magnet_url) is True
+
+    result = extractor.analyze(magnet_url)
+    assert result.success is True
+    assert result.platform == "BitTorrent"
+    assert result.content_type == "torrent"
+    assert "Sintel" in result.title
+    assert len(result.items) == 1
+    assert result.items[0].media_type == "torrent"
+

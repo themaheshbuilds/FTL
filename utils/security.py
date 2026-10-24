@@ -45,8 +45,13 @@ def validate_url_security(url: str) -> Tuple[bool, str]:
     parsed = urlparse(url.strip())
 
     # 1. Check scheme
-    if parsed.scheme.lower() not in ("http", "https"):
-        return False, f"Unsupported scheme '{parsed.scheme}'. Only http and https are allowed."
+    scheme_lower = parsed.scheme.lower()
+    if scheme_lower == "magnet":
+        # Magnet links are P2P URIs and contain no hostnames or internal endpoints
+        return True, ""
+
+    if scheme_lower not in ("http", "https"):
+        return False, f"Unsupported scheme '{parsed.scheme}'. Only http, https, and magnet are allowed."
 
     # 2. Hostname presence
     hostname = parsed.hostname

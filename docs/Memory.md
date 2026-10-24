@@ -481,3 +481,21 @@ pytest -v
   2. **Exposed Frontend Quality Dropdown:**
      - In `static/js/downloader.js` (and mirrored in `public/static/js/downloader.js`), `renderOptions` dynamically unhides `#quality-setting-group` whenever video items or content type are present, pre-selecting `⚡ Highest Quality Available (Original / 4K / 1080p)`.
      - Individual video cards feature `Download MP4 (Highest Quality)` buttons passing the user's selected resolution directly to `/api/generate`.
+
+### 9. Client-Side WebTorrent Engine ($0 Zero-Cost & Vercel Free-Tier Compatibility)
+- **The Problem:**
+  - BitTorrent downloading traditionally requires long-lived backend processes, raw TCP/UDP listening sockets, and massive bandwidth transfer.
+  - On cloud serverless platforms like Vercel (free tier on `.vercel.app`), serverless functions have a 10s-60s timeout ceiling, strict memory limits, and block raw inbound P2P socket listening, making server-side torrenting impossible or prohibitively expensive.
+- **The Solution:**
+  1. **Pure Client-Side In-Browser P2P (`webtorrent.min.js`):**
+     - When a user submits a `magnet:` URI or uploads a `.torrent` file, the application activates an in-browser WebTorrent client connecting directly to WebRTC swarm peers and public hybrid trackers (`wss://tracker.openwebtorrent.com`, `wss://tracker.webtorrent.dev`, etc.).
+     - **$0.00 Server Cost:** Transfers 0 bytes through Vercel serverless functions, completely bypassing execution timeouts, serverless socket blocks, and hosting bandwidth costs.
+  2. **Live Swarm Dashboard & Stream Player:**
+     - Displays live metrics: Download Speed (MB/s), Upload Speed, Connected Peers, Time Remaining (ETA), and interactive byte progress.
+     - Live In-Browser Video Streaming: Uses WebTorrent's `renderTo` to stream video files (`.mp4`, `.webm`, `.mkv`) directly into HTML5 video players while actively downloading from peers.
+     - Single-click local file saving via blob object URLs (`file.getBlobURL`).
+  3. **Backend Safety & Normalization:**
+     - `utils/security.py` explicitly allows the `magnet` protocol, exempting P2P URIs from false-positive SSRF blocks.
+     - `utils/validation.py` preserves magnet links during normalization.
+     - `extractors/torrent.py` provides clean `TorrentExtractor` metadata parsing (`xt`, `dn`, infohash) for platform detection.
+

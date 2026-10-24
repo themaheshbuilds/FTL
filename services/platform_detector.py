@@ -36,6 +36,10 @@ class PlatformDetector:
     @staticmethod
     def detect_platform(url: str) -> str:
         """Identify platform name from URL."""
+        cleaned = url.strip().lower()
+        if cleaned.startswith("magnet:") or cleaned.endswith(".torrent"):
+            return "BitTorrent"
+
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").lower()
 

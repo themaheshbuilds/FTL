@@ -85,14 +85,18 @@
               <div class="url-input-bar">
                 <span class="url-icon">&#x1F517;</span>
                 <input
-                  type="url"
+                  type="text"
                   id="url-input"
                   class="main-input"
-                  placeholder="Paste URL here (Instagram, YouTube, TikTok, Reddit, X, LinkedIn...)"
+                  placeholder="Paste URL or Magnet link (YouTube, Instagram, TikTok, Torrents...)"
                   required
                   spellcheck="false"
                 >
                 <div class="input-actions">
+                  <button type="button" class="icon-button" id="torrent-upload-btn" title="Upload .torrent file">
+                    <span>🧲</span> .torrent
+                  </button>
+                  <input type="file" id="torrent-file-input" accept=".torrent" style="display:none">
                   <button type="button" class="icon-button" id="paste-btn" title="Paste from clipboard">
                     <span>&#x1F4CB;</span> Paste
                   </button>
@@ -118,6 +122,7 @@
               <div class="platform-chip li"><span>&#x1F4BC;</span> LinkedIn</div>
               <div class="platform-chip"><span>&#x1D54F;</span> X (Twitter)</div>
               <div class="platform-chip fb"><span>&#x1F464;</span> Facebook</div>
+              <div class="platform-chip torrent" data-example="magnet:?xt=urn:btih:08ada5a7a6183aae1e09be831df674f7e60f135e&dn=Sintel"><span>🧲</span> Torrents &amp; Magnets</div>
               <div class="platform-chip"><span>&#x1F310;</span> Direct Files</div>
             </div>
           </div>
@@ -251,7 +256,87 @@
           </div>
         </div>
 
-        <!-- 6. Error View -->
+        <!-- 6. Torrent Live Download View (Client-Side WebTorrent / $0 Vercel Free) -->
+        <div id="torrent-view" class="torrent-view hidden">
+          <div class="torrent-header-bar">
+            <div>
+              <div class="torrent-badges-row">
+                <span class="badge-platform">🧲 BitTorrent P2P</span>
+                <span class="badge-type" id="torrent-hash-badge">BTIH Swarm</span>
+                <span class="badge-torrent-free">⚡ 100% Free In-Browser P2P</span>
+              </div>
+              <h2 class="result-title" id="torrent-title">Connecting to Torrent Swarm...</h2>
+              <p class="result-summary" id="torrent-status-summary">Contacting WebRTC trackers and discovering peers...</p>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-cancel-torrent">✕ Stop Torrent</button>
+          </div>
+
+          <!-- Torrent Live Metrics Panel -->
+          <div class="torrent-metrics-grid">
+            <div class="torrent-metric-card">
+              <span class="metric-icon">⬇️</span>
+              <div class="metric-details">
+                <span class="metric-label">Download Speed</span>
+                <span class="metric-val" id="torrent-dl-speed">0 KB/s</span>
+              </div>
+            </div>
+            <div class="torrent-metric-card">
+              <span class="metric-icon">⬆️</span>
+              <div class="metric-details">
+                <span class="metric-label">Upload Speed</span>
+                <span class="metric-val" id="torrent-ul-speed">0 KB/s</span>
+              </div>
+            </div>
+            <div class="torrent-metric-card">
+              <span class="metric-icon">👥</span>
+              <div class="metric-details">
+                <span class="metric-label">Connected Peers</span>
+                <span class="metric-val" id="torrent-peers">0 peers</span>
+              </div>
+            </div>
+            <div class="torrent-metric-card">
+              <span class="metric-icon">⏱️</span>
+              <div class="metric-details">
+                <span class="metric-label">Time Remaining</span>
+                <span class="metric-val" id="torrent-eta">Connecting...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="torrent-progress-container">
+            <div class="torrent-progress-track">
+              <div class="torrent-progress-fill" id="torrent-progress-bar" style="width: 0%"></div>
+            </div>
+            <div class="torrent-progress-sub">
+              <span id="torrent-bytes-info">0 MB / 0 MB (0%)</span>
+              <span id="torrent-health-info">Direct WebRTC Swarm</span>
+            </div>
+          </div>
+
+          <!-- In-Browser Stream Player (for video/audio torrents) -->
+          <div id="torrent-player-container" class="torrent-player-container" style="display:none">
+            <div class="media-seg-header" style="margin-bottom:12px">
+              <div class="media-seg-title" style="color:#f8fafc">
+                <span>🎬</span> Live Stream Player (Watching While Downloading)
+              </div>
+            </div>
+            <div class="torrent-video-wrapper" id="torrent-video-wrapper"></div>
+          </div>
+
+          <!-- Files List inside the Torrent -->
+          <div class="media-seg-header" style="margin-top: 24px">
+            <div class="media-seg-title">
+              <span>📁</span> Files in Torrent (<span id="torrent-file-count">0</span>)
+            </div>
+            <button type="button" class="btn-batch-action" id="btn-torrent-save-all" style="display:none">
+              ⬇️ Save All Files
+            </button>
+          </div>
+          <div class="torrent-files-list" id="torrent-files-list"></div>
+        </div>
+
+        <!-- 7. Error View -->
         <div id="error-view" class="error-view hidden">
           <div class="error-badge-icon">&#x26A0;</div>
           <h2 class="error-title">Could Not Process Link</h2>
@@ -301,6 +386,7 @@
         <div class="modal-body">
           <h4>Supported Sources</h4>
           <ul>
+            <li><strong>BitTorrent:</strong> Magnet links &amp; .torrent files (100% Free In-Browser P2P)</li>
             <li><strong>Instagram:</strong> Posts, Reels, Carousels, and Audio</li>
             <li><strong>YouTube:</strong> Standard Videos, Shorts, Audio Extraction</li>
             <li><strong>TikTok:</strong> Videos, Slideshows, Audio tracks</li>
@@ -326,6 +412,7 @@
 
   </div>
 
-  <script src="{{ url_for('static', filename='js/downloader.js') }}?v=20261015"></script>
+  <script src="{{ url_for('static', filename='vendor/webtorrent.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/downloader.js') }}?v=20261024"></script>
 </body>
 </html>
