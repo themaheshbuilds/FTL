@@ -293,7 +293,7 @@ class MediaService:
 
         except Exception as e:
             logger.error(f"Error in process_and_package for {url}: {e}", exc_info=True)
-            return False, None, None, None, None, "An internal error occurred during processing."
+            return False, None, None, None, None, f"An internal error occurred during processing: {e}"
 
     @classmethod
     def _download_items_to_dir(cls, items: List[MediaItem], target_dir: str, filter_type: Optional[str] = None) -> List[str]:
