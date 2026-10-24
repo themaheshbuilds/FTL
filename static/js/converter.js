@@ -230,6 +230,10 @@ const ConverterApp = {
 
             card.addEventListener("click", () => {
                 this.selectTool(tool.id);
+                if (this.selectedFiles.length === 0) {
+                    const fileInput = document.getElementById("converter-file-input");
+                    if (fileInput) fileInput.click();
+                }
             });
 
             grid.appendChild(card);
@@ -374,7 +378,20 @@ const ConverterApp = {
     },
 
     async startConversion() {
-        if (!this.activeTool || this.selectedFiles.length === 0) return;
+        if (!this.activeTool) {
+            alert("Please select a conversion tool first.");
+            return;
+        }
+        if (this.selectedFiles.length === 0) {
+            alert("Please select or drop at least one file to convert.");
+            return;
+        }
+
+        const btnConvert = document.getElementById("btn-start-convert");
+        if (btnConvert) {
+            btnConvert.disabled = true;
+            btnConvert.innerHTML = `<span>⏳</span> Converting File...`;
+        }
 
         this.showView("processing-view");
 
@@ -411,6 +428,11 @@ const ConverterApp = {
             this.showSuccess(data);
         } catch (err) {
             this.showError("Network interruption occurred while converting file.");
+        } finally {
+            if (btnConvert) {
+                btnConvert.disabled = false;
+                btnConvert.innerHTML = `&#x26A1; Convert File Now`;
+            }
         }
     },
 

@@ -82,10 +82,31 @@ const DedicatedToolConverter = {
         }
     },
 
+    getToolConfig() {
+        if (typeof window !== "undefined" && window.TOOL_CONFIG) {
+            return window.TOOL_CONFIG;
+        }
+        if (typeof TOOL_CONFIG !== "undefined" && TOOL_CONFIG) {
+            return TOOL_CONFIG;
+        }
+        // Fallback: extract tool ID from URL pathname e.g. /converter/image-converter
+        const pathParts = window.location.pathname.split("/").filter(Boolean);
+        if (pathParts.length >= 2 && pathParts[0] === "converter") {
+            const slug = pathParts[1];
+            return {
+                id: slug.replace(/-/g, "_"),
+                multiple: true,
+                accept: "*/*"
+            };
+        }
+        return { id: "generic", multiple: true, accept: "*/*" };
+    },
+
     handleFiles(files) {
         if (!files || files.length === 0) return;
 
-        if (window.TOOL_CONFIG && !window.TOOL_CONFIG.multiple) {
+        const config = this.getToolConfig();
+        if (config && !config.multiple) {
             this.selectedFiles = [files[0]];
         } else {
             this.selectedFiles = files;
@@ -146,7 +167,17 @@ const DedicatedToolConverter = {
     },
 
     async startConversion() {
-        if (this.selectedFiles.length === 0 || !window.TOOL_CONFIG) return;
+        if (this.selectedFiles.length === 0) {
+            alert("Please select or drop at least one file to convert.");
+            return;
+        }
+
+        const config = this.getToolConfig();
+        const btnConvert = document.getElementById("btn-start-tool-convert");
+        if (btnConvert) {
+            btnConvert.disabled = true;
+            btnConvert.innerHTML = `<span>⏳</span> Converting File...`;
+        }
 
         this.showView("processing-view");
 
@@ -157,7 +188,7 @@ const DedicatedToolConverter = {
         const customFilename = customFilenameInput ? customFilenameInput.value.trim() : "";
 
         const formData = new FormData();
-        formData.append("conversion_type", window.TOOL_CONFIG.id);
+        formData.append("conversion_type", config.id);
         formData.append("output_format", outputFormat);
         formData.append("custom_filename", customFilename);
 
@@ -183,6 +214,11 @@ const DedicatedToolConverter = {
             this.showSuccess(data, outputFormat);
         } catch (err) {
             this.showError("Network interruption occurred while converting file.");
+        } finally {
+            if (btnConvert) {
+                btnConvert.disabled = false;
+                btnConvert.innerHTML = `&#x26A1; Convert File Now`;
+            }
         }
     },
 

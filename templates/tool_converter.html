@@ -295,12 +295,13 @@
   </div>
 
   <script>
-    const TOOL_CONFIG = {
+    window.TOOL_CONFIG = {
       id: "{{ tool.id }}",
       multiple: {{ 'true' if tool.multiple else 'false' }},
       accept: "{{ tool.accept }}"
     };
+    var TOOL_CONFIG = window.TOOL_CONFIG;
   </script>
-  <script src="{{ url_for('static', filename='js/tool_converter.js') }}?v=20261015"></script>
+  <script src="{{ url_for('static', filename='js/tool_converter.js') }}?v=20261024_2"></script>
 </body>
 </html>
