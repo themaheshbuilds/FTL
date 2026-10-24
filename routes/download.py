@@ -15,8 +15,9 @@ def download_file(file_id: str):
     """GET /download/<file_id>
     Streams or delivers the generated package file to the user.
     """
-    # 1. Path traversal protection: file_id must be alphanumeric
-    if not file_id or not file_id.isalnum() or len(file_id) > 32:
+    # 1. Path traversal protection: file_id must be alphanumeric, hyphen, or underscore
+    import re
+    if not file_id or not re.match(r"^[a-zA-Z0-9_-]{1,64}$", file_id):
         return jsonify({
             "success": False,
             "error": {

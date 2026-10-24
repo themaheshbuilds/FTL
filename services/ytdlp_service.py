@@ -179,8 +179,8 @@ class YtDlpService:
             "fragment_retries": 2,
             "extract_flat": False,
             "noplaylist": True,
-            "youtube_include_dash_manifest": False,
-            "youtube_include_hls_manifest": False,
+            "youtube_include_dash_manifest": True,
+            "youtube_include_hls_manifest": True,
             "ignoreerrors": True,
             "nocheckcertificate": False,
             "windowsfilenames": True,
@@ -188,6 +188,15 @@ class YtDlpService:
             "geo_bypass": True,
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         }
+
+        import shutil
+        js_runtimes = {}
+        if shutil.which("node"):
+            js_runtimes["node"] = {}
+        elif shutil.which("deno"):
+            js_runtimes["deno"] = {}
+        if js_runtimes:
+            opts["js_runtimes"] = js_runtimes
 
         cookie_file = cls.get_cookie_file()
         if cookie_file:
@@ -228,11 +237,13 @@ class YtDlpService:
 
         if is_youtube:
             client_configs = [
-                # 1. Primary: android mobile client WITHOUT cookies (bypasses datacenter blocks, ~1.5s)
-                ({"player_client": ["android"], "player_skip": ["webpage", "configs"]}, False),
-                # 2. Secondary: default web client with cookies
+                # 1. Primary: visionos Apple client WITHOUT cookies (bypasses datacenter blocks, returns all clean formats)
+                ({"player_client": ["visionos", "web"], "player_skip": ["configs"]}, False),
+                # 2. Secondary: android + web client
+                ({"player_client": ["android", "web"]}, False),
+                # 3. Fallback: default web client with cookies
                 ({"player_client": ["default", "-tv"]}, True),
-                # 3. Fallback: safari client with cookies
+                # 4. Safari client
                 ({"player_client": ["safari"]}, True),
             ]
         else:
@@ -444,40 +455,29 @@ class YtDlpService:
                 }]
         elif format_filter in ("highest", "max", "4k", "2160p", "1440p", "best"):
             # Maximum available resolution (4K, 1440p, 1080p 60fps) merged with best audio stream
+            custom_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
             if ffmpeg_bin:
-                if is_serverless and format_filter == "best":
-                    custom_opts["format"] = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best[ext=mp4]/best"
-                else:
-                    custom_opts["format"] = "bestvideo+bestaudio/best"
                 custom_opts["merge_output_format"] = "mp4"
                 custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
-            else:
-                custom_opts["format"] = "bestvideo+bestaudio/best[ext=mp4]/best/18"
         elif format_filter == "1080p":
+            custom_opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best"
             if ffmpeg_bin:
-                custom_opts["format"] = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
                 custom_opts["merge_output_format"] = "mp4"
                 custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
-            else:
-                custom_opts["format"] = "best[height<=1080][ext=mp4]/best[ext=mp4]/18/best"
         elif format_filter == "720p":
+            custom_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best"
             if ffmpeg_bin:
-                custom_opts["format"] = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
                 custom_opts["merge_output_format"] = "mp4"
                 custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
-            else:
-                custom_opts["format"] = "best[height<=720][ext=mp4]/best[ext=mp4]/18/best"
         elif format_filter == "480p":
+            custom_opts["format"] = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best"
             if ffmpeg_bin:
-                custom_opts["format"] = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
                 custom_opts["merge_output_format"] = "mp4"
                 custom_opts["final_ext"] = "mp4"
                 custom_opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
-            else:
-                custom_opts["format"] = "best[height<=480][ext=mp4]/best[ext=mp4]/18/best"
         else:
             # Custom format string
             if ffmpeg_bin:
@@ -492,8 +492,8 @@ class YtDlpService:
         if is_youtube:
             custom_opts["extractor_args"] = {
                 "youtube": {
-                    "player_client": ["ios", "mweb", "android"],
-                    "player_skip": ["webpage", "configs"]
+                    "player_client": ["visionos", "web"],
+                    "player_skip": ["configs"]
                 }
             }
 
@@ -506,15 +506,14 @@ class YtDlpService:
                 if info:
                     download_success = True
         except Exception as e:
-            logger.warning(f"Primary download trial failed for {url}: {e}. Attempting mobile client fallback...")
-            # Fallback for cloud/bot challenges: mobile ios/mweb clients without cookies
+            logger.warning(f"Primary download trial failed for {url}: {e}. Attempting visionos mobile fallback...")
             fallback_opts = dict(opts)
             fallback_opts.pop("cookiefile", None)
-            fallback_opts["format"] = "best[ext=mp4]/best/18"
+            fallback_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best/18"
             fallback_opts["extractor_args"] = {
                 "youtube": {
-                    "player_client": ["ios", "mweb", "android"],
-                    "player_skip": ["webpage", "configs"]
+                    "player_client": ["visionos"],
+                    "player_skip": ["configs"]
                 }
             }
             try:
@@ -523,7 +522,7 @@ class YtDlpService:
                     if info:
                         download_success = True
             except Exception as e2:
-                logger.error(f"Mobile fallback download also failed for {url}: {e2}")
+                logger.error(f"VisionOS fallback download also failed for {url}: {e2}")
 
         if not download_success:
             return None
